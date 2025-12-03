@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   HomeIcon,
@@ -6,65 +6,93 @@ import {
   WalletIcon,
   MegaphoneIcon,
   MagnifyingGlassIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  CheckCircleIcon,
+  TrashIcon,
+  PencilIcon
 } from "@heroicons/react/24/outline";
+import { createAnnouncement, getAnnouncements, deleteAnnouncement, updateAnnouncement } from '../../../services/api';
+import AdminSidebar from "../../AdminSidebar";
 
 export default function Announcements() {
   const navigate = useNavigate();
 
-  const sidebarItems = [
-    { name: "Dashboard", icon: <HomeIcon className="w-5 h-5" />, path: "/admin-dashboard" },
-    { name: "User Reports", icon: <UsersIcon className="w-5 h-5" />, path: "/user-reports" },
-    { name: "Wallet Logs", icon: <WalletIcon className="w-5 h-5" />, path: "/wallet-logs" },
-    { name: "Post Announcement", icon: <MegaphoneIcon className="w-5 h-5" />, path: "/announcements" },
-    { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
-  ];
 
-  const announcements = [
-    {
-      title: "Service Policy Update",
-      date: "Jan 15, 2025",
-      audience: "All Users",
-      status: "Active",
-    },
-    {
-      title: "Maintenance Notice",
-      date: "Jan 8, 2025",
-      audience: "Providers",
-      status: "Expires Soon",
-    },
-    {
-      title: "Holiday Schedule",
-      date: "Dec 20, 2024",
-      audience: "All Users",
-      status: "Expired",
-    },
-  ];
+
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    targetAudience: 'All Users',
+    expirationDate: ''
+  });
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const response = await getAnnouncements();
+      setAnnouncements(response.data);
+    } catch (error) {
+      console.error('Error fetching announcements:', error);
+    }
+  };
+
+  const handleEdit = (announcement) => {
+    setEditingAnnouncement(announcement);
+    setFormData({
+      title: announcement.title,
+      content: announcement.content,
+      targetAudience: announcement.target_audience,
+      expirationDate: announcement.expiration_date || ''
+    });
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this announcement?')) {
+      try {
+        await deleteAnnouncement(id);
+        fetchAnnouncements();
+        alert('Announcement deleted successfully');
+      } catch (error) {
+        alert('Failed to delete announcement');
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (editingAnnouncement) {
+        await updateAnnouncement(editingAnnouncement.id, formData);
+        setEditingAnnouncement(null);
+      } else {
+        await createAnnouncement(formData);
+      }
+      setFormData({
+        title: '',
+        content: '',
+        targetAudience: 'All Users',
+        expirationDate: ''
+      });
+      fetchAnnouncements();
+      alert(editingAnnouncement ? 'Announcement updated successfully!' : 'Announcement created successfully!');
+    } catch (error) {
+      alert(editingAnnouncement ? 'Failed to update announcement' : 'Failed to create announcement');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Sidebar */}
-      <div className="w-72 bg-white shadow-xl z-20">
-        <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600">
-          <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
-          <p className="text-blue-100 text-sm mt-1">System Management</p>
-        </div>
-
-        <nav className="p-4 space-y-2">
-          {sidebarItems.map((item) => (
-            <button
-              key={item.name}
-              onClick={() => navigate(item.path)}
-              className="flex items-center w-full p-3 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-200 group hover:bg-gradient-to-r from-blue-50 to-indigo-50"
-            >
-              <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform duration-200">
-                {item.icon}
-              </div>
-              <span className="ml-3 font-medium">{item.name}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
+      <AdminSidebar />
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
@@ -98,7 +126,7 @@ export default function Announcements() {
             <div className="col-span-2 bg-white p-6 rounded-lg shadow">
               <h2 className="text-lg font-semibold mb-4">Create New Announcement</h2>
 
-              <div className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
@@ -107,6 +135,8 @@ export default function Announcements() {
                   <input
                     type="text"
                     placeholder="e.g., Service Notification Policy Update"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="w-full border rounded-md px-3 py-2 text-sm"
                   />
                 </div>
@@ -117,6 +147,8 @@ export default function Announcements() {
                   <textarea
                     rows="5"
                     placeholder="Enter announcement content, guidelines, news, reminders, policies, or updates..."
+                    value={formData.content}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                     className="w-full border rounded-md px-3 py-2 text-sm"
                   ></textarea>
                   <div className="flex justify-end text-xs text-gray-400 mt-1">
@@ -129,15 +161,33 @@ export default function Announcements() {
                   <p className="text-sm font-medium mb-1">Target Audience</p>
                   <div className="space-y-1 text-sm">
                     <label className="flex items-center space-x-2">
-                      <input type="radio" name="audience" defaultChecked />
+                      <input
+                        type="radio"
+                        name="audience"
+                        value="All Users"
+                        checked={formData.targetAudience === 'All Users'}
+                        onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
+                      />
                       <span>All Users</span>
                     </label>
                     <label className="flex items-center space-x-2">
-                      <input type="radio" name="audience" />
-                      <span>Providers Only</span>
+                      <input
+                        type="radio"
+                        name="audience"
+                        value="Tutors Only"
+                        checked={formData.targetAudience === 'Tutors Only'}
+                        onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
+                      />
+                      <span>Tutors Only</span>
                     </label>
                     <label className="flex items-center space-x-2">
-                      <input type="radio" name="audience" />
+                      <input
+                        type="radio"
+                        name="audience"
+                        value="Learners Only"
+                        checked={formData.targetAudience === 'Learners Only'}
+                        onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
+                      />
                       <span>Requesters Only</span>
                     </label>
                   </div>
@@ -151,6 +201,8 @@ export default function Announcements() {
                   <input
                     type="text"
                     placeholder="mm/dd/yyyy"
+                    value={formData.expirationDate}
+                    onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
                     className="w-full border rounded-md px-3 py-2 text-sm"
                   />
                   <p className="text-xs text-gray-400 mt-1">
@@ -160,17 +212,15 @@ export default function Announcements() {
 
                 {/* Buttons */}
                 <div className="flex space-x-3 mt-4">
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm">
-                    Publish Announcement
-                  </button>
-                  <button className="border px-4 py-2 rounded-md text-sm">
-                    Preview
-                  </button>
-                  <button className="border px-4 py-2 rounded-md text-sm">
-                    Save Draft
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm"
+                    disabled={loading}
+                  >
+                    {loading ? 'Publishing...' : 'Publish Announcement'}
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
 
             {/* Recent Announcements */}
@@ -192,23 +242,30 @@ export default function Announcements() {
               </div>
 
               <div className="space-y-4">
-                {announcements.map((a, idx) => (
-                  <div key={idx} className="border-b pb-2">
-                    <h3 className="text-sm font-medium">{a.title}</h3>
-                    <p className="text-xs text-gray-500">
-                      {a.date} • {a.audience}
-                    </p>
-                    <p
-                      className={`text-xs mt-1 ${
-                        a.status === "Active"
-                          ? "text-green-600"
-                          : a.status === "Expires Soon"
-                          ? "text-yellow-600"
-                          : "text-gray-400"
-                      }`}
-                    >
-                      {a.status}
-                    </p>
+                {announcements.map((a) => (
+                  <div key={a.id} className="border-b pb-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-sm font-medium">{a.title}</h3>
+                        <p className="text-xs text-gray-500">
+                          {new Date(a.created_at).toLocaleDateString()} • {a.target_audience}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(a)}
+                          className="p-1 hover:bg-gray-100 rounded-full"
+                        >
+                          <PencilIcon className="h-4 w-4 text-blue-600" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(a.id)}
+                          className="p-1 hover:bg-gray-100 rounded-full"
+                        >
+                          <TrashIcon className="h-4 w-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -1,8 +1,10 @@
 // LoginForm.jsx
 import React, { useState } from 'react';
 import { FaEnvelope, FaEye, FaEyeSlash } from 'react-icons/fa';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { login } from '../../../services/api';
+import { getAdminDashboardData } from '../../../services/adminApi';
+import Toast from '../../common/Toast';
 
 const LoginForm = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +13,14 @@ const LoginForm = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState(null);
   const navigate = useNavigate();
+
+  const validateEmail = (email) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -20,16 +29,148 @@ const LoginForm = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Static credential check
-    if (formData.email === 'user@gmail.com' && formData.password === 'user') {
-      navigate('/dashboard');
-    } else if (formData.email === 'admin@gmail.com' && formData.password === 'admin') {
-      navigate('/admin-dashboard');
-    } else {
-      setError('Invalid credentials. Please try again.');
+    setError('');
+    setIsLoading(true);
+
+    // Hardcoded admin credentials
+    if (formData.email === 'admin@craftmeup.com' && formData.password === 'admin') {
+      const adminUser = {
+        id: 'admin1',
+        email: 'admin@craftmeup.com',
+        role: 'admin',
+        type: 'admin',
+        fullName: 'Admin User'
+      };
+
+      const mockDashboardData = {
+        stats: [
+          { title: 'Total Users', value: '1,234', icon: 'UsersIcon' },
+          { title: 'Active Services', value: '856', icon: 'ClipboardIcon' },
+          { title: 'Total Revenue', value: '₱45,678', icon: 'WalletIcon' },
+          { title: 'Pending Reports', value: '23', icon: 'FlagIcon' },
+          { title: 'Active Sessions', value: '189', icon: 'ClockIcon' }
+        ],
+        reports: [
+          { id: 1, name: 'John Doe', type: 'Service', submittedBy: 'User', date: '2024-01-20', status: 'Pending' },
+          { id: 2, name: 'Jane Smith', type: 'User', submittedBy: 'Admin', date: '2024-01-19', status: 'Resolved' }
+        ],
+        dashboard: {
+          recentActivity: [],
+          notifications: []
+        }
+      };
+      
+      localStorage.setItem('token', 'admin-token');
+      localStorage.setItem('user', JSON.stringify(adminUser));
+      localStorage.setItem('adminDashboardData', JSON.stringify(mockDashboardData));
+      
+      setToast({
+        message: 'Login successful!',
+        type: 'success',
+        isLoading: false,
+        showProgress: true,
+        duration: 1000,
+      });
+
+      const redirectTimer = setTimeout(() => {
+        navigate('/admin-dashboard');
+      }, 1000);
+
+      setIsLoading(false);
+      return () => clearTimeout(redirectTimer);
+    }
+
+    // Continue with regular user login flow
+    try {
+      const response = await login(formData.email, formData.password);
+
+      if (response.data && response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        
+        // Check if user has admin role
+        if (response.data.user && (response.data.user.role === 'admin' || response.data.user.type === 'admin')) {
+          try {
+            const adminDataRes = await getAdminDashboardData(response.data.token);
+            localStorage.setItem('adminDashboardData', JSON.stringify(adminDataRes.data));
+            
+            setToast({
+              message: 'Login successful!',
+              type: 'success',
+              isLoading: false,
+              showProgress: true,
+              duration: 1000,
+            });
+
+            const redirectTimer = setTimeout(() => {
+              navigate('/admin-dashboard');
+            }, 1000);
+
+            setIsLoading(false);
+            return () => clearTimeout(redirectTimer);
+          } catch (adminErr) {
+            setToast({
+              message: 'Failed to retrieve admin dashboard data.',
+              type: 'error',
+              isLoading: false,
+              showProgress: false,
+              duration: 2000,
+            });
+            localStorage.clear();
+            setIsLoading(false);
+          }
+        } else {
+          setToast({
+            message: 'Login successful!',
+            type: 'success',
+            isLoading: false,
+            showProgress: true,
+            duration: 1000,
+          });
+
+          const redirectTimer = setTimeout(() => {
+            navigate('/dashboard');
+          }, 1000);
+
+          setIsLoading(false);
+          return () => clearTimeout(redirectTimer);
+        }
+      } else {
+        setToast({
+          message: 'Invalid response format from server',
+          type: 'error',
+          isLoading: false,
+          showProgress: false,
+          duration: 2000,
+        });
+        setIsLoading(false);
+      }
+    } catch (error) {
+      let errorMessage = 'An error occurred during login';
+      
+      if (error.response) {
+        switch (error.response.status) {
+          case 401:
+            errorMessage = 'Invalid email or password';
+            break;
+          case 404:
+            errorMessage = 'Account not found';
+            break;
+          default:
+            errorMessage = error.response.data?.message || 'Server error';
+        }
+      }
+      
+      setToast({
+        message: errorMessage,
+        type: 'error',
+        isLoading: false,
+        showProgress: false,
+        duration: 3000,
+      });
+      setIsLoading(false);
     }
   };
 
@@ -94,7 +235,11 @@ const LoginForm = () => {
 
             {/* Forgot Password */}
             <div className="flex justify-end">
-              <button type="button" className="text-sm text-blue-600 hover:text-blue-700">
+              <button 
+                type="button" 
+                onClick={() => navigate('/forgot-password')}
+                className="text-sm text-blue-600 hover:text-blue-700"
+              >
                 Forgot password?
               </button>
             </div>
@@ -102,9 +247,11 @@ const LoginForm = () => {
             {/* Login Button */}
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-medium text-lg hover:from-blue-700 hover:to-indigo-700 transform transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
+              disabled={isLoading}
+              className={`w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-medium text-lg 
+                ${isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-indigo-700 transform transition-all duration-200 hover:scale-[1.02] hover:shadow-lg'}`}
             >
-              Sign in
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
 
@@ -120,6 +267,18 @@ const LoginForm = () => {
           </p>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          isLoading={toast.isLoading}
+          showProgress={toast.showProgress}
+          duration={toast.duration}
+        />
+      )}
     </div>
   );
 };

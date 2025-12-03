@@ -1,206 +1,204 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  HomeIcon,
-  UsersIcon,
-  WalletIcon,
-  MegaphoneIcon,
   BellIcon,
-  ClockIcon,
-  ExclamationTriangleIcon,
-  CalendarIcon,
-  MagnifyingGlassIcon, // Changed from SearchIcon
-  ArrowRightOnRectangleIcon
+  MagnifyingGlassIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  UserGroupIcon,
+  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
+import AdminSidebar from "../../AdminSidebar";
+import api from "../../../services/api";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("User Reports");
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalReports: 0,
+    pendingVerifications: 0,
+    walletRequests: 0,
+  });
+  const [recentReports, setRecentReports] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const sidebarItems = [
-    { name: "Dashboard", icon: <HomeIcon className="w-5 h-5" />, path: "/admin-dashboard" },
-    { name: "User Reports", icon: <UsersIcon className="w-5 h-5" />, path: "/user-reports" }, // Updated path
-    { name: "Wallet Logs", icon: <WalletIcon className="w-5 h-5" />, path: "/wallet-logs" }, // Updated path
-    { name: "Post Announcement", icon: <MegaphoneIcon className="w-5 h-5" />, path: "/announcements" }, // Updated path
-    { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
-  const stats = [
-    { title: "New Reports Today", value: 12, icon: <BellIcon className="w-5 h-5" /> },
-    { title: "Active Users Online", value: "2,847", icon: <UsersIcon className="w-5 h-5" /> },
-    { title: "Wallet Requests Pending", value: 34, icon: <ClockIcon className="w-5 h-5" /> },
-    { title: "Flagged Messages", value: 8, icon: <ExclamationTriangleIcon className="w-5 h-5" /> },
-    { title: "Services Listed This Week", value: 156, icon: <CalendarIcon className="w-5 h-5" /> },
-  ];
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all necessary data
+      const [usersRes, reportsRes, verificationsRes, walletRes] = await Promise.all([
+        api.get("/admin/all-users").catch(() => ({ data: [] })),
+        api.get("/admin/reports").catch(() => ({ data: [] })),
+        api.get("/auth/unverified-users").catch(() => ({ data: [] })),
+        api.get("/admin/wallet-requests").catch(() => ({ data: [] })),
+      ]);
 
-  const tabs = ["User Reports", "Dispute Center", "Wallet Logs"];
+      const reports = reportsRes.data || [];
+      const pendingReports = reports.filter(r => r.status === 'pending' || !r.status);
+      const walletRequests = (walletRes.data || []).filter(w => w.status === 'pending');
 
-  const reports = [
-    {
-      id: "#USR-001",
-      name: "John Smith",
-      type: "Inappropriate Content",
-      submittedBy: "Maria Garcia",
-      date: "Jan 15, 2025",
-      status: "Pending",
-    },
-    {
-      id: "#USR-002",
-      name: "Alex Johnson",
-      type: "Scam/Fraud",
-      submittedBy: "Sarah Wilson",
-      date: "Jan 14, 2025",
-      status: "Resolved",
-    },
-  ];
+      setStats({
+        totalUsers: (usersRes.data || []).length,
+        totalReports: reports.length,
+        pendingVerifications: (verificationsRes.data || []).length,
+        walletRequests: walletRequests.length,
+      });
+
+      setRecentReports(pendingReports.slice(0, 5));
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const StatCard = ({ title, value, icon: Icon, color }) => (
+    <div className={`bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-gray-500 text-sm mb-1">{title}</p>
+          <p className={`text-3xl font-bold ${color}`}>{value}</p>
+        </div>
+        <div className={`p-4 rounded-xl ${color === 'text-blue-600' ? 'bg-blue-100' : color === 'text-red-600' ? 'bg-red-100' : color === 'text-yellow-600' ? 'bg-yellow-100' : 'bg-green-100'}`}>
+          <Icon className={`w-8 h-8 ${color}`} />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Sidebar */}
-      <div className="w-72 bg-white shadow-xl z-20">
-        <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600">
-          <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
-          <p className="text-blue-100 text-sm mt-1">System Management</p>
-        </div>
-        
-        <nav className="p-4 space-y-2">
-          {sidebarItems.map((item) => (
-            <button
-              key={item.name}
-              onClick={() => navigate(item.path)}
-              className="flex items-center w-full p-3 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-200 group hover:bg-gradient-to-r from-blue-50 to-indigo-50"
-            >
-              <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform duration-200">
-                {item.icon}
-              </div>
-              <span className="ml-3 font-medium">{item.name}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
+      <AdminSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-white border-b shadow-sm">
           <div className="flex items-center justify-between px-8 py-6">
-            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-              Dashboard Overview
-            </h2>
+            <div>
+              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
+                Dashboard Overview
+              </h2>
+              <p className="text-gray-500 text-sm mt-1">Welcome back, Admin</p>
+            </div>
             <div className="flex items-center space-x-4">
-              <div className="relative">
+              <div className="relative hidden sm:block">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search..."
                   className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-64"
                 />
-                <MagnifyingGlassIcon className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" /> {/* Changed from SearchIcon */}
               </div>
+              <button className="relative hover:bg-gray-100 p-2 rounded-lg transition-colors">
+                <BellIcon className="h-6 w-6 text-gray-600" />
+                <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+              </button>
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center text-white font-semibold">
-                AS
+                AD
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-8 overflow-y-auto h-[calc(100vh-5rem)]">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-5 gap-6 mb-8">
-            {stats.map((stat, index) => (
-              <div
-                key={stat.title}
-                className="bg-white p-6 rounded-2xl border border-gray-100 hover:shadow-lg transition-shadow"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 rounded-xl ${
-                    index === 0 ? 'bg-blue-100' :
-                    index === 1 ? 'bg-green-100' :
-                    index === 2 ? 'bg-purple-100' :
-                    index === 3 ? 'bg-red-100' :
-                    'bg-yellow-100'
-                  }`}>
-                    {stat.icon}
-                  </div>
-                  <span className={`text-sm font-medium ${
-                    index === 0 ? 'text-blue-600' :
-                    index === 1 ? 'text-green-600' :
-                    index === 2 ? 'text-purple-600' :
-                    index === 3 ? 'text-red-600' :
-                    'text-yellow-600'
-                  }`}>
-                    +{Math.floor(Math.random() * 30)}%
-                  </span>
-                </div>
-                <p className="text-gray-500 text-sm">{stat.title}</p>
-                <p className="text-2xl font-bold mt-1">{stat.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Reports Table */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex space-x-1 p-4 bg-gray-50 border-b">
-              {tabs.map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                    activeTab === tab
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
-
-            {/* Table Content */}
-            {activeTab === "User Reports" && (
-              <div className="p-6">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-sm text-gray-500">
-                      <th className="px-4 py-3 bg-gray-50 rounded-l-lg">ID</th>
-                      <th className="px-4 py-3 bg-gray-50">Name</th>
-                      <th className="px-4 py-3 bg-gray-50">Type</th>
-                      <th className="px-4 py-3 bg-gray-50">Submitted By</th>
-                      <th className="px-4 py-3 bg-gray-50">Date</th>
-                      <th className="px-4 py-3 bg-gray-50">Status</th>
-                      <th className="px-4 py-3 bg-gray-50 rounded-r-lg">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {reports.map((r) => (
-                      <tr key={r.id} className="border-b">
-                        <td className="py-2">{r.id}</td>
-                        <td>{r.name}</td>
-                        <td>{r.type}</td>
-                        <td>{r.submittedBy}</td>
-                        <td>{r.date}</td>
-                        <td>
-                          <span
-                            className={`px-2 py-1 rounded text-xs ${
-                              r.status === "Pending"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
-                          >
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="space-x-2">
-                          <button className="text-sm text-blue-600">View</button>
-                          <button className="text-sm text-red-600">Suspend</button>
-                          <button className="text-sm text-green-600">Resolve</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          ) : (
+            <>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <StatCard 
+                  title="Total Users" 
+                  value={stats.totalUsers} 
+                  icon={UserGroupIcon}
+                  color="text-blue-600"
+                />
+                <StatCard 
+                  title="Total Reports" 
+                  value={stats.totalReports} 
+                  icon={ExclamationCircleIcon}
+                  color="text-red-600"
+                />
+                <StatCard 
+                  title="Pending Verifications" 
+                  value={stats.pendingVerifications} 
+                  icon={CheckCircleIcon}
+                  color="text-yellow-600"
+                />
+                <StatCard 
+                  title="Wallet Requests" 
+                  value={stats.walletRequests} 
+                  icon={CurrencyDollarIcon}
+                  color="text-green-600"
+                />
               </div>
-            )}
-          </div>
+
+              {/* Recent Reports */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Reports</h3>
+                </div>
+                
+                {recentReports.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">
+                    No recent reports
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-gray-600 font-medium">Reported User</th>
+                          <th className="px-6 py-3 text-left text-gray-600 font-medium">Reporter</th>
+                          <th className="px-6 py-3 text-left text-gray-600 font-medium">Reason</th>
+                          <th className="px-6 py-3 text-left text-gray-600 font-medium">Date</th>
+                          <th className="px-6 py-3 text-left text-gray-600 font-medium">Status</th>
+                          <th className="px-6 py-3 text-left text-gray-600 font-medium">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {recentReports.map((report) => (
+                          <tr key={report.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4">
+                              <p className="font-medium text-gray-900">{report.reported_user_name}</p>
+                            </td>
+                            <td className="px-6 py-4 text-gray-600">{report.reporter_name}</td>
+                            <td className="px-6 py-4 text-gray-600">{report.reason}</td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {new Date(report.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                                Pending
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <button 
+                                onClick={() => navigate("/user-reports")}
+                                className="text-blue-600 hover:text-blue-700 font-medium"
+                              >
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

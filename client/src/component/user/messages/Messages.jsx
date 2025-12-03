@@ -1,4 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
+import { getConversations } from '../../../services/api';
 import {
   HomeIcon,
   UserIcon,
@@ -13,88 +16,125 @@ import {
   Bars3Icon,
   XMarkIcon,
   BellIcon,
-  MagnifyingGlassIcon as SearchIcon
 } from "@heroicons/react/24/outline";
-import { useNavigate } from 'react-router-dom';
 
 export default function Messages() {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [socket, setSocket] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const navItems = [
-    { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
-    { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
-    { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-    { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
-    { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
-    { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
-    { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
-    { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
-    { name: "Feedback", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/feedback" },
-    { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
-  ];
+  useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    setUserData(storedUser);
 
-  const chats = [
-    {
-      name: "Sarah Chen",
-      time: "2:30 PM",
-      message: "Sure! I can help with your logo design project...",
-      service: "Logo Design Service",
-      avatar: "https://via.placeholder.com/40",
-    },
-    {
-      name: "Mike Johnson",
-      time: "Yesterday",
-      message: "Thanks for the math tutoring session!",
-      service: "Math Tutoring Service",
-      avatar: "https://via.placeholder.com/40",
-    },
-    {
-      name: "Emma Davis",
-      time: "11:45 AM",
-      message: "When would be a good time to start the project?",
-      service: "Web Development Service",
-      avatar: "https://via.placeholder.com/40",
-    },
-    {
-      name: "Alex Rivera",
-      time: "Monday",
-      message: "Perfect! The essay editing is complete.",
-      service: "Essay Editing Service",
-      avatar: "https://via.placeholder.com/40",
-    },
-    {
-      name: "Lisa Park",
-      time: "Sunday",
-      message: "Great working with you on the presentation!",
-      service: "Presentation Design Service",
-      avatar: "https://via.placeholder.com/40",
-    },
-    {
-      name: "Tom Wilson",
-      time: "Last Week",
-      message: "The coding assignment help was excellent!",
-      service: "Programming Help Service",
-      avatar: "https://via.placeholder.com/40",
-    },
-  ];
+    // Initialize Socket.IO
+    const newSocket = io('http://localhost:5000', {
+      auth: {
+        userId: storedUser?.id
+      }
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Connected to socket server');
+      newSocket.emit('user-online', storedUser?.id);
+    });
+
+    newSocket.on('user-status-change', (data) => {
+      setOnlineUsers(prev => ({
+        ...prev,
+        [data.userId]: data.status
+      }));
+    });
+
+    newSocket.on('receive-message', (messageData) => {
+      // Refresh conversations when new message arrives
+      if (storedUser?.id) {
+        fetchConversations(storedUser.id);
+      }
+    });
+
+    setSocket(newSocket);
+
+    // Fetch conversations
+    if (storedUser?.id) {
+      fetchConversations(storedUser.id);
+    }
+
+    return () => {
+      newSocket.emit('user-offline', storedUser?.id);
+      newSocket.close();
+    };
+  }, []);
+
+  const fetchConversations = async (userId) => {
+    try {
+      const data = await getConversations(userId);
+      setConversations(data);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    }
+  };
+
+  const role = userData?.role?.toLowerCase() || '';
+
+  const navItems = (() => {
+    if (role === 'learner') {
+      return [
+        { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
+        { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
+        { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
+        { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+        { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
+        { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
+        { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
+        { name: "Feedbacks & Ratings", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
+        { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
+      ];
+    }
+
+    if (role === 'tutor') {
+      return [
+        { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
+        { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
+        { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
+        { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
+        { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
+        { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
+        { name: "Feedbacks & Ratings", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
+        { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
+      ];
+    }
+
+    return [
+      { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
+      { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
+      { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
+      { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
+      { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+      { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
+      { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
+      { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
+      { name: "Feedbacks & Ratings", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
+      { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
+    ];
+  })();
+
+  const filteredConversations = conversations.filter(conv =>
+    conv.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col w-full md:max-w-sm mx-auto relative">
-      {/* Sidebar - Updated to match Dashboard */}
-      <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} bg-gradient-to-b from-gray-50 to-white w-64 transition-transform duration-300 ease-in-out z-30 md:max-w-sm shadow-xl border-r flex flex-col`}>
-        {/* Header */}
-        <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex justify-between items-center">
-          <h2 className="font-semibold text-white">Menu</h2>
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
-          >
-            <XMarkIcon className="h-6 w-6" />
-          </button>
+    <div className="bg-gradient-to-b from-blue-50 to-white min-h-screen flex flex-col lg:flex-row w-full">
+      {/* Sidebar - Desktop */}
+      <div className="hidden lg:flex fixed inset-y-0 left-0 bg-gradient-to-b from-gray-50 to-white w-64 flex-col shadow-xl border-r z-30">
+        <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600">
+          <h2 className="font-semibold text-white text-lg">Menu</h2>
         </div>
 
-        {/* Navigation - Scrollable */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <button
@@ -105,7 +145,38 @@ export default function Messages() {
               <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform duration-200">
                 {item.icon}
               </div>
-              <span className="ml-3 font-medium">{item.name}</span>
+              <span className="ml-3 font-medium text-sm">{item.name}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Sidebar - Mobile */}
+      <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} bg-gradient-to-b from-gray-50 to-white w-64 transition-transform duration-300 ease-in-out z-40 lg:hidden flex flex-col shadow-xl border-r`}>
+        <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex justify-between items-center">
+          <h2 className="font-semibold text-white">Menu</h2>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+
+        <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
+          {navItems.map((item) => (
+            <button
+              key={item.name}
+              onClick={() => {
+                navigate(item.path);
+                setIsSidebarOpen(false);
+              }}
+              className="flex items-center w-full p-3 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-200 group hover:bg-gradient-to-r from-blue-50 to-indigo-50"
+            >
+              <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform duration-200">
+                {item.icon}
+              </div>
+              <span className="ml-3 font-medium text-sm">{item.name}</span>
             </button>
           ))}
         </nav>
@@ -114,69 +185,95 @@ export default function Messages() {
       {/* Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20"
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         ></div>
       )}
 
-      {/* Header - Updated to match dashboard */}
-      <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <button onClick={() => setIsSidebarOpen(true)}>
-              <Bars3Icon className="h-6 w-6 text-white" />
+      {/* Main Content */}
+      <div className="flex-1 lg:ml-64 overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white sticky top-0 z-20 shadow-lg">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors"
+              >
+                <Bars3Icon className="h-6 w-6" />
+              </button>
+              <h1 className="text-lg sm:text-xl font-semibold truncate">Messages</h1>
+            </div>
+            <button 
+              onClick={() => navigate('/notification')} 
+              className="flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors relative"
+            >
+              <BellIcon className="h-6 w-6" />
+              <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
             </button>
-            <h1 className="text-lg font-semibold">Messages</h1>
           </div>
-          <button 
-            onClick={() => navigate('/notification')} 
-            className="relative"
-          >
-            <BellIcon className="h-6 w-6 text-white" />
-            <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
-          </button>
         </div>
-      </div>
 
-      {/* Search */}
-      <div className="px-4 py-3 sticky top-0 bg-white/80 backdrop-blur-md border-b z-10">
-        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-2xl px-4 py-2 shadow-sm border border-gray-100">
-          <SearchIcon className="text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            className="flex-1 bg-transparent outline-none text-sm"
-          />
-        </div>
-      </div>
-
-      {/* Chat List */}
-      <div className="flex-1 overflow-y-auto px-4">
-        {chats.map((chat, index) => (
-          <div 
-            key={index}
-            onClick={() => navigate('/messages/chat')}
-            className="flex items-center space-x-3 p-3 hover:bg-blue-50/50 rounded-2xl transition-all cursor-pointer border-b border-gray-100 last:border-none"
-          >
-            <div className="relative">
-              <img 
-                src={chat.avatar} 
-                className="w-12 h-12 rounded-full object-cover shadow-md border-2 border-white"
-              />
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-            </div>
-            <div className="flex-1">
-              <div className="flex justify-between items-center">
-                <h2 className="font-semibold text-gray-900">{chat.name}</h2>
-                <span className="text-xs text-gray-500">{chat.time}</span>
-              </div>
-              <p className="text-sm text-gray-600 truncate">{chat.message}</p>
-              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-full mt-1 inline-block">
-                {chat.service}
-              </span>
-            </div>
+        {/* Search */}
+        <div className="px-3 sm:px-4 py-2 sm:py-3 sticky top-14 sm:top-16 bg-white/80 backdrop-blur-md border-b z-10">
+          <div className="flex items-center gap-2 bg-white rounded-2xl px-3 py-2 shadow-sm border border-gray-100">
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 bg-transparent outline-none text-xs sm:text-sm"
+            />
           </div>
-        ))}
+        </div>
+
+        {/* Chat List */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="w-full px-2 sm:px-3 lg:px-4 py-2 sm:py-3">
+            <div className="space-y-1.5 sm:space-y-2">
+              {filteredConversations.length === 0 ? (
+                <div className="text-center py-12 sm:py-16">
+                  <ChatBubbleLeftIcon className="h-12 sm:h-16 w-12 sm:w-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-sm sm:text-base">No conversations yet</p>
+                </div>
+              ) : (
+                filteredConversations.map((chat, index) => (
+                  <div 
+                    key={index}
+                    onClick={() => navigate(`/messages/chat/${chat.user_id}`)}
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 hover:bg-blue-50/50 rounded-xl transition-all cursor-pointer border border-gray-100 hover:border-blue-200"
+                  >
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-full object-cover shadow-md border-2 border-white bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center">
+                        <span className="text-white font-bold text-sm">
+                          {chat.name?.[0]?.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className={`absolute bottom-0 right-0 w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full border-2 border-white ${
+                        onlineUsers[chat.user_id] === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                      }`}></span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2 mb-0.5">
+                        <h2 className="font-semibold text-sm sm:text-base text-gray-900 truncate">{chat.name}</h2>
+                      </div>
+                      <p className="text-xs text-gray-600 mb-1">{chat.role}</p>
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full inline-block font-medium">
+                        Last: {new Date(chat.last_message_time).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="h-2 sm:h-3"></div>
+          </div>
+        </div>
       </div>
     </div>
   );

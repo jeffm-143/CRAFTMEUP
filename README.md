@@ -13,4 +13,3 @@ npm install
 npm run dev
 npm install express cors dotenv mysql2 bcryptjs jsonwebtoken multer
 npm install --save-dev nodemon
-npm install socket.io

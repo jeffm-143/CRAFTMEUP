@@ -3,6 +3,7 @@ let io;
 
 const setIO = (socketInstance) => {
   io = socketInstance;
+  console.log('✅ Socket.IO initialized in serviceController');
 };
 
 exports.getAllServices = async (req, res) => {
@@ -17,8 +18,8 @@ exports.getAllServices = async (req, res) => {
                 COUNT(f.id) as total_ratings
             FROM services s
             JOIN users u ON s.user_id = u.id
-            LEFT JOIN feedback f ON s.id = f.service_id
-            WHERE s.status = "Active"
+            LEFT JOIN feedback f ON s.id = f.service_id AND f.deleted_at IS NULL
+            WHERE s.status = "Active" AND s.deleted_at IS NULL
             GROUP BY s.id
             ORDER BY s.created_at DESC
         `);
@@ -34,8 +35,8 @@ exports.createService = async (req, res) => {
         const { userId, title, description, price, availability } = req.body;
         
         const [result] = await pool.execute(
-            `INSERT INTO services (user_id, title, description, price, availability) 
-             VALUES (?, ?, ?, ?, ?)`,
+            `INSERT INTO services (user_id, title, description, price, availability, status) 
+             VALUES (?, ?, ?, ?, ?, 'Active')`,
             [userId, title, description, price, availability]
         );
 
@@ -45,17 +46,19 @@ exports.createService = async (req, res) => {
                 s.*,
                 u.full_name as user_full_name,
                 u.id as user_id,
+                u.role as user_role,
                 COALESCE(AVG(f.rating), 0) as average_rating,
                 COUNT(f.id) as total_ratings
             FROM services s
             JOIN users u ON s.user_id = u.id
-            LEFT JOIN feedback f ON s.id = f.service_id
-            WHERE s.id = ?
+            LEFT JOIN feedback f ON s.id = f.service_id AND f.deleted_at IS NULL
+            WHERE s.id = ? AND s.deleted_at IS NULL
             GROUP BY s.id
         `, [result.insertId]);
 
-        // Emit to all clients
+        // ✅ Emit to ALL clients
         if (io) {
+          console.log('📡 Broadcasting service-created event');
           io.emit('service-created', newService[0]);
         }
 
@@ -77,11 +80,14 @@ exports.getUserServices = async (req, res) => {
         const [services] = await pool.execute(`
             SELECT 
                 s.*,
+                u.full_name as user_full_name,
+                u.id as user_id,
                 COALESCE(AVG(f.rating), 0) as average_rating,
                 COUNT(f.id) as total_ratings
             FROM services s
-            LEFT JOIN feedback f ON s.id = f.service_id
-            WHERE s.user_id = ?
+            JOIN users u ON s.user_id = u.id
+            LEFT JOIN feedback f ON s.id = f.service_id AND f.deleted_at IS NULL
+            WHERE s.user_id = ? AND s.deleted_at IS NULL
             GROUP BY s.id
             ORDER BY s.created_at DESC
         `, [userId]);
@@ -113,8 +119,12 @@ exports.updateService = async (req, res) => {
 
     const [result] = await pool.execute(
       `UPDATE services
-        SET title = ?, description = ?, price = ?, availability = ?, status = ?
-        WHERE id = ?`,
+        SET title = COALESCE(?, title), 
+            description = COALESCE(?, description), 
+            price = COALESCE(?, price), 
+            availability = COALESCE(?, availability), 
+            status = ?
+        WHERE id = ? AND deleted_at IS NULL`,
       sanitized
     );
 
@@ -128,17 +138,19 @@ exports.updateService = async (req, res) => {
             s.*,
             u.full_name as user_full_name,
             u.id as user_id,
+            u.role as user_role,
             COALESCE(AVG(f.rating), 0) as average_rating,
             COUNT(f.id) as total_ratings
         FROM services s
         JOIN users u ON s.user_id = u.id
-        LEFT JOIN feedback f ON s.id = f.service_id
-        WHERE s.id = ?
+        LEFT JOIN feedback f ON s.id = f.service_id AND f.deleted_at IS NULL
+        WHERE s.id = ? AND s.deleted_at IS NULL
         GROUP BY s.id
     `, [serviceId]);
 
-    // Emit to all clients
+    // ✅ Emit to ALL clients
     if (io && updatedService.length > 0) {
+      console.log('📡 Broadcasting service-updated event');
       io.emit('service-updated', updatedService[0]);
     }
 
@@ -157,14 +169,19 @@ exports.deleteService = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid service ID is required' });
     }
 
-    const [result] = await pool.execute('DELETE FROM services WHERE id = ?', [serviceId]);
+    // ✅ SOFT DELETE: Set deleted_at instead of hard delete
+    const [result] = await pool.execute(
+      'UPDATE services SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
+      [serviceId]
+    );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Service not found' });
+      return res.status(404).json({ success: false, message: 'Service not found or already deleted' });
     }
 
-    // Emit to all clients
+    // ✅ Emit to ALL clients - Send just the serviceId
     if (io) {
+      console.log('📡 Broadcasting service-deleted event for serviceId:', serviceId);
       io.emit('service-deleted', serviceId);
     }
 
@@ -175,6 +192,53 @@ exports.deleteService = async (req, res) => {
   }
 };
 
+exports.restoreService = async (req, res) => {
+  try {
+    const serviceId = parseInt(req.params.serviceId || req.params.id, 10);
+
+    if (!serviceId || isNaN(serviceId)) {
+      return res.status(400).json({ success: false, message: 'Valid service ID is required' });
+    }
+
+    // ✅ Restore deleted service
+    const [result] = await pool.execute(
+      'UPDATE services SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL',
+      [serviceId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Service not found or not deleted' });
+    }
+
+    // Fetch restored service
+    const [restoredService] = await pool.execute(`
+        SELECT 
+            s.*,
+            u.full_name as user_full_name,
+            u.id as user_id,
+            u.role as user_role,
+            COALESCE(AVG(f.rating), 0) as average_rating,
+            COUNT(f.id) as total_ratings
+        FROM services s
+        JOIN users u ON s.user_id = u.id
+        LEFT JOIN feedback f ON s.id = f.service_id AND f.deleted_at IS NULL
+        WHERE s.id = ?
+        GROUP BY s.id
+    `, [serviceId]);
+
+    // ✅ Emit to ALL clients
+    if (io && restoredService.length > 0) {
+      console.log('📡 Broadcasting service-created event (restored)');
+      io.emit('service-created', restoredService[0]);
+    }
+
+    res.json({ success: true, message: 'Service restored successfully', service: restoredService[0] });
+  } catch (error) {
+    console.error('Error restoring service:', error);
+    res.status(500).json({ success: false, message: 'Failed to restore service', error: error.message });
+  }
+};
+
 exports.createBooking = async (req, res) => {
     try {
         const { userId, serviceId, status } = req.body;
@@ -182,16 +246,16 @@ exports.createBooking = async (req, res) => {
         const [result] = await pool.execute(
             `INSERT INTO transactions (user_id, service_id, type, status, amount) 
              SELECT ?, ?, 'booking', ?, price
-             FROM services WHERE id = ?`,
+             FROM services WHERE id = ? AND deleted_at IS NULL`,
             [userId, serviceId, status || 'pending', serviceId]
         );
 
         const [booking] = await pool.execute(
-            `SELECT t.*, s.title, s.description, s.price, u.full_name as provider_name
+            `SELECT t.*, s.title as service_title, s.description, s.price, u.full_name as provider_name
              FROM transactions t 
              JOIN services s ON t.service_id = s.id 
              JOIN users u ON s.user_id = u.id 
-             WHERE t.id = ?`,
+             WHERE t.id = ? AND s.deleted_at IS NULL`,
             [result.insertId]
         );
 
@@ -209,7 +273,6 @@ exports.getUserBookings = async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Get bookings for both service provider and requester
         const [bookings] = await pool.execute(`
             SELECT 
                 t.*,
@@ -228,7 +291,7 @@ exports.getUserBookings = async (req, res) => {
             JOIN services s ON t.service_id = s.id
             JOIN users provider ON s.user_id = provider.id
             JOIN users requester ON t.user_id = requester.id
-            WHERE t.user_id = ? OR s.user_id = ?
+            WHERE (t.user_id = ? OR s.user_id = ?) AND s.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `, [userId, userId, userId]);
 
@@ -243,7 +306,6 @@ exports.getUserTransactions = async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Get transactions where user is either the learner or provider
         const [transactions] = await pool.execute(`
             SELECT 
                 t.*,
@@ -260,7 +322,7 @@ exports.getUserTransactions = async (req, res) => {
             JOIN services s ON t.service_id = s.id
             JOIN users provider ON s.user_id = provider.id
             JOIN users learner ON t.user_id = learner.id
-            WHERE t.user_id = ? OR s.user_id = ?
+            WHERE (t.user_id = ? OR s.user_id = ?) AND s.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `, [userId, userId, userId]);
 
@@ -276,19 +338,16 @@ exports.updateBookingStatus = async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
 
-        // Validate status
         const validStatuses = ['pending', 'ongoing', 'ready', 'completed', 'rejected'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }
 
-        // Update transaction status
         await pool.execute(
             'UPDATE transactions SET status = ? WHERE id = ?',
             [status, id]
         );
 
-        // Get updated transaction
         const [transactions] = await pool.execute(`
             SELECT t.*, 
                 s.title as service_title,
@@ -304,7 +363,7 @@ exports.updateBookingStatus = async (req, res) => {
             JOIN services s ON t.service_id = s.id
             JOIN users provider ON s.user_id = provider.id
             JOIN users requester ON t.user_id = requester.id
-            WHERE t.id = ?
+            WHERE t.id = ? AND s.deleted_at IS NULL
         `, [id]);
 
         if (transactions.length === 0) {
@@ -331,6 +390,28 @@ exports.createFeedback = async (req, res) => {
             [serviceId, userId, rating, comment]
         );
 
+        // Fetch the updated service with new average rating
+        const [updatedService] = await pool.execute(`
+            SELECT 
+                s.*,
+                u.full_name as user_full_name,
+                u.id as user_id,
+                u.role as user_role,
+                COALESCE(AVG(f.rating), 0) as average_rating,
+                COUNT(f.id) as total_ratings
+            FROM services s
+            JOIN users u ON s.user_id = u.id
+            LEFT JOIN feedback f ON s.id = f.service_id AND f.deleted_at IS NULL
+            WHERE s.id = ? AND s.deleted_at IS NULL
+            GROUP BY s.id
+        `, [serviceId]);
+
+        // ✅ Emit service update with new ratings
+        if (io && updatedService.length > 0) {
+          console.log('📡 Broadcasting service-updated event (new feedback)');
+          io.emit('service-updated', updatedService[0]);
+        }
+
         res.status(201).json({
             message: 'Feedback submitted successfully',
             feedbackId: result.insertId
@@ -345,12 +426,13 @@ exports.getUserFeedback = async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Get feedback both as a tutor and as a learner
+        // ✅ Show ALL feedbacks, even for deleted services
         const [feedbacks] = await pool.execute(`
             SELECT 
                 f.*,
                 s.title as service_title,
                 s.description as service_description,
+                s.deleted_at as service_deleted_at,
                 s.user_id as provider_id,
                 provider.full_name as provider_name,
                 learner.full_name as learner_name,
@@ -362,11 +444,11 @@ exports.getUserFeedback = async (req, res) => {
             JOIN services s ON f.service_id = s.id
             JOIN users provider ON s.user_id = provider.id
             JOIN users learner ON f.user_id = learner.id
-            WHERE f.user_id = ? OR s.user_id = ?
+            WHERE (f.user_id = ? OR s.user_id = ?) AND f.deleted_at IS NULL
             ORDER BY f.created_at DESC
         `, [userId, userId, userId]);
 
-        console.log('Fetched feedbacks:', feedbacks); // Debug log
+        console.log('Fetched feedbacks:', feedbacks);
         res.json(feedbacks);
     } catch (error) {
         console.error('Error fetching user feedback:', error);
@@ -383,15 +465,14 @@ exports.getWalletBalance = async (req, res) => {
         );
 
         if (wallet.length === 0) {
-            // Create wallet if it doesn't exist
             await pool.execute(
                 'INSERT INTO wallet (user_id, balance) VALUES (?, 50.00)',
                 [userId]
             );
-            return res.json({ balance: 50.00 });
+            return res.json({ data: { balance: 50.00 } });
         }
 
-        res.json({ balance: parseFloat(wallet[0].balance) });
+        res.json({ data: { balance: parseFloat(wallet[0].balance) } });
     } catch (error) {
         console.error('Error fetching wallet:', error);
         res.status(500).json({ message: 'Failed to fetch wallet balance' });
@@ -406,7 +487,6 @@ exports.transferFunds = async (req, res) => {
         
         console.log('Transfer request:', { fromUserId, toUserId, amount, bookingId });
 
-        // Validate inputs
         if (!fromUserId || !toUserId || !amount || !bookingId) {
             connection.release();
             return res.status(400).json({ 
@@ -415,23 +495,19 @@ exports.transferFunds = async (req, res) => {
             });
         }
 
-        // Validate user IDs are different
         if (parseInt(fromUserId) === parseInt(toUserId)) {
             connection.release();
             return res.status(400).json({ message: 'Cannot transfer to yourself' });
         }
 
-        // Parse amount to ensure it's a number
         const transferAmount = parseFloat(amount);
         if (isNaN(transferAmount) || transferAmount <= 0) {
             connection.release();
             return res.status(400).json({ message: 'Invalid amount' });
         }
 
-        // Start transaction
         await connection.beginTransaction();
 
-        // Check if learner has sufficient balance
         const [learnerWallet] = await connection.execute(
             'SELECT balance FROM wallet WHERE user_id = ?',
             [fromUserId]
@@ -454,7 +530,6 @@ exports.transferFunds = async (req, res) => {
             });
         }
 
-        // Ensure provider wallet exists
         const [providerWallet] = await connection.execute(
             'SELECT * FROM wallet WHERE user_id = ?',
             [toUserId]
@@ -467,40 +542,39 @@ exports.transferFunds = async (req, res) => {
             );
         }
 
-        // Deduct from learner's wallet
-        const [deductResult] = await connection.execute(
+        await connection.execute(
             'UPDATE wallet SET balance = balance - ? WHERE user_id = ?',
             [transferAmount, fromUserId]
         );
 
-        console.log('Deduct result:', deductResult);
-
-        // Add to provider's wallet
-        const [addResult] = await connection.execute(
+        await connection.execute(
             'UPDATE wallet SET balance = balance + ? WHERE user_id = ?',
             [transferAmount, toUserId]
         );
 
-        console.log('Add result:', addResult);
-
-        // Update booking status to completed
-        const [updateResult] = await connection.execute(
+        await connection.execute(
             'UPDATE transactions SET status = ? WHERE id = ?',
             ['completed', bookingId]
         );
 
-        console.log('Update booking result:', updateResult);
-
-        // Commit transaction
         await connection.commit();
 
-        // Get updated wallet balance
         const [updatedWallet] = await connection.execute(
             'SELECT balance FROM wallet WHERE user_id = ?',
             [fromUserId]
         );
 
         connection.release();
+
+        // ✅ Emit wallet update
+        if (io) {
+          io.emit('wallet-updated', {
+            fromUserId,
+            toUserId,
+            amount: transferAmount,
+            type: 'transfer'
+          });
+        }
 
         res.json({
             message: 'Payment completed successfully',
@@ -512,11 +586,9 @@ exports.transferFunds = async (req, res) => {
         console.error('Transfer error:', error);
         res.status(500).json({ 
             message: 'Failed to process payment',
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: error.message
         });
     }
-    
 };
 
 exports.getServiceFeedbacks = async (req, res) => {
@@ -538,7 +610,7 @@ exports.getServiceFeedbacks = async (req, res) => {
         u.full_name as learner_name
       FROM feedback f
       JOIN users u ON f.user_id = u.id
-      WHERE f.service_id = ?
+      WHERE f.service_id = ? AND f.deleted_at IS NULL
       ORDER BY f.created_at DESC
     `, [serviceId]);
 
@@ -548,8 +620,6 @@ exports.getServiceFeedbacks = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch feedbacks', error: error.message });
   }
 };
-
-
 
 module.exports = {
   ...module.exports,

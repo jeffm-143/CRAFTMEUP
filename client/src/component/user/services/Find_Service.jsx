@@ -18,7 +18,7 @@ import {
   StarIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
-import { getAllServices, createBooking } from "../../../services/api";
+import { getAllServices, createBooking, bookmarkService, unbookmarkService, getSavedServices } from "../../../services/api";
 import io from "socket.io-client";
 
 // Star Rating Display Component
@@ -94,28 +94,27 @@ function FeedbackModal({ service, onClose }) {
     fetchServiceFeedbacks();
   }, [service.id]);
 
-      const fetchServiceFeedbacks = async () => {
-        try {
-          setLoading(true);
-          // Changed from /api/feedback/service/:id to /api/services/:id/feedbacks
-          const response = await fetch(`http://localhost:5000/api/services/${service.id}/feedbacks`);
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch feedbacks: ${response.status}`);
-          }
-          
-          const data = await response.json();
-          console.log('Feedbacks:', data);
-          setFeedbacks(data);
-          setError(null);
-        } catch (err) {
-          console.error('Error fetching feedbacks:', err);
-          setError(err.message);
-          setFeedbacks([]);
-        } finally {
-          setLoading(false);
-        }
-      };
+  const fetchServiceFeedbacks = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`http://localhost:5000/api/services/${service.id}/feedbacks`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch feedbacks: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Feedbacks:', data);
+      setFeedbacks(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching feedbacks:', err);
+      setError(err.message);
+      setFeedbacks([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderStars = (rating) => {
     const stars = [];
@@ -204,7 +203,7 @@ function FeedbackModal({ service, onClose }) {
                     <p className="text-2xl font-bold text-gray-900">{feedbacks.length}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 uppercase font-semibold mb-1">Tutor</p>
+                    <p className="text-xs text-gray-600 uppercase font-semibold mb-1">Provider</p>
                     <p className="text-lg font-semibold text-gray-900">{service.provider}</p>
                   </div>
                 </div>
@@ -368,7 +367,6 @@ function BookingModal({ service, onClose, onConfirm }) {
 const FilterPanel = ({ filters, handleFilterChange, categories }) => (
   <div className="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-gray-100 mb-4 mx-4">
     <div className="space-y-3">
-
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">
@@ -424,6 +422,8 @@ const FindServices = () => {
   const [services, setServices] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [userData, setUserData] = useState(null);
+  const [bookmarkedServices, setBookmarkedServices] = useState(new Set());
+  const [loadingBookmarks, setLoadingBookmarks] = useState(new Set());
   const [filters, setFilters] = useState({
     category: "",
     minPrice: "",
@@ -435,29 +435,14 @@ const FindServices = () => {
   const [selectedFeedbackService, setSelectedFeedbackService] = useState(null);
   const socketRef = useRef(null);
 
-  const handleMessage = (service) => {
-    try {
-      const currentUser = JSON.parse(localStorage.getItem('user'));
-      
-      console.log('Service object:', service);
-      console.log('Current user:', currentUser);
-      
-      if (!service.user_id) {
-        alert('Service provider information not available');
-        return;
-      }
-
-      if (currentUser?.role?.toLowerCase() === service.user_role?.toLowerCase()) {
-        alert('You can only message users with different roles');
-        return;
-      }
-
-      navigate(`/messages/chat/${service.user_id}`);
-    } catch (error) {
-      console.error('Error initiating message:', error);
-      alert('Failed to open chat. Please try again.');
-    }
-  };
+  const categories = [
+    "All",
+    "Origami",
+    "Crocheting",
+    "Embroidery",
+    "Scrapbooking",
+    "Resin Art",
+  ];
 
   const role = userData?.role?.toLowerCase() || '';
 
@@ -503,15 +488,86 @@ const FindServices = () => {
     ];
   })();
 
-  const categories = [
-    "All",
-    "Origami",
-    "Crocheting",
-    "Embroidery",
-    "Scrapbooking",
-    "Resin Art",
-  ];
-  
+  // Load bookmarked services on component mount and when userData changes
+  useEffect(() => {
+    if (userData?.id) {
+      loadBookmarkedServices();
+    }
+  }, [userData]);
+
+  const loadBookmarkedServices = async () => {
+    try {
+      const saved = await getSavedServices(userData.id);
+      const bookmarkedIds = new Set(saved.map(s => s.id));
+      setBookmarkedServices(bookmarkedIds);
+      console.log('📌 Bookmarked services loaded:', bookmarkedIds);
+    } catch (error) {
+      console.error('Error loading bookmarked services:', error);
+    }
+  };
+
+  const toggleBookmark = async (serviceId, e) => {
+    e.stopPropagation();
+    
+    try {
+      setLoadingBookmarks(prev => new Set(prev).add(serviceId));
+      
+      if (bookmarkedServices.has(serviceId)) {
+        // Remove bookmark
+        await unbookmarkService(serviceId);
+        setBookmarkedServices(prev => {
+          const updated = new Set(prev);
+          updated.delete(serviceId);
+          return updated;
+        });
+        console.log('✅ Bookmark removed:', serviceId);
+      } else {
+        // Add bookmark
+        await bookmarkService(serviceId);
+        setBookmarkedServices(prev => new Set(prev).add(serviceId));
+        console.log('✅ Bookmark added:', serviceId);
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      if (error.response?.data?.isAlreadyBookmarked) {
+        // If already bookmarked, update UI
+        setBookmarkedServices(prev => new Set(prev).add(serviceId));
+      } else {
+        alert('Failed to update bookmark');
+      }
+    } finally {
+      setLoadingBookmarks(prev => {
+        const updated = new Set(prev);
+        updated.delete(serviceId);
+        return updated;
+      });
+    }
+  };
+
+  const handleMessage = (service) => {
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('user'));
+      
+      console.log('Service object:', service);
+      console.log('Current user:', currentUser);
+      
+      if (!service.user_id) {
+        alert('Service provider information not available');
+        return;
+      }
+
+      if (currentUser?.role?.toLowerCase() === service.user_role?.toLowerCase()) {
+        alert('You can only message users with different roles');
+        return;
+      }
+
+      navigate(`/messages/chat/${service.user_id}`);
+    } catch (error) {
+      console.error('Error initiating message:', error);
+      alert('Failed to open chat. Please try again.');
+    }
+  };
+
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
@@ -534,14 +590,13 @@ const FindServices = () => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Connected to WebSocket');
+      console.log('✅ Find Services: Connected to WebSocket');
       const user = JSON.parse(localStorage.getItem('user'));
       if (user?.id) {
         socket.emit('user-online', user.id);
       }
     });
 
-    // Listen for service updates
     socket.on('service-updated', (updatedService) => {
       console.log('🔄 Service updated:', updatedService);
       
@@ -552,7 +607,6 @@ const FindServices = () => {
       );
     });
 
-    // Listen for service creations
     socket.on('service-created', (newService) => {
       console.log('✨ New service created:', newService);
       
@@ -562,7 +616,6 @@ const FindServices = () => {
       }
     });
 
-    // Listen for service deletions
     socket.on('service-deleted', (deletedServiceId) => {
       console.log('🗑️ Service deleted:', deletedServiceId);
       
@@ -570,9 +623,33 @@ const FindServices = () => {
         prevServices.filter(service => service.id !== deletedServiceId)
       );
     });
+    
+    // LISTEN FOR BOOKMARK ADDED
+    socket.on('bookmark-service-added', (data) => {
+      console.log('📌 Find Services: Bookmark added detected:', data);
+      if (userData?.id === data.userId) {
+        // Add to bookmarked services
+        setBookmarkedServices(prev => new Set(prev).add(data.serviceId));
+        console.log('✅ Service added to bookmarks');
+      }
+    });
+
+    // LISTEN FOR BOOKMARK REMOVED
+    socket.on('bookmark-service-removed', (data) => {
+      console.log('🗑️ Find Services: Bookmark removed detected:', data);
+      if (userData?.id === data.userId) {
+        // Remove from bookmarked services
+        setBookmarkedServices(prev => {
+          const updated = new Set(prev);
+          updated.delete(data.serviceId);
+          return updated;
+        });
+        console.log('✅ Service removed from bookmarks');
+      }
+    });
 
     socket.on('disconnect', () => {
-      console.log('❌ Disconnected from WebSocket');
+      console.log('❌ Find Services: Disconnected from WebSocket');
     });
 
     socket.on('error', (error) => {
@@ -586,7 +663,7 @@ const FindServices = () => {
       }
       socket.disconnect();
     };
-  }, []);
+  }, [userData]);
 
   // Initial fetch and filters
   useEffect(() => {
@@ -607,7 +684,6 @@ const FindServices = () => {
 
       const otherServices = servicesWithProvider.filter(service => service.user_id !== user.id);
 
-      // Smart update - only update if data actually changed
       setServices(prevServices => {
         const prevJson = JSON.stringify(prevServices);
         const newJson = JSON.stringify(otherServices);
@@ -659,30 +735,57 @@ const FindServices = () => {
     setSelectedService(service);
   };
 
-  const handleConfirmBooking = async (service) => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user'));
-      const bookingData = {
-        userId: user.id,
-        serviceId: service.id,
-        providerId: service.user_id,
-        type: 'booking',
-        amount: service.price,
-        status: 'pending'
-      };
+const handleConfirmBooking = async (service) => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    const bookingData = {
+      userId: user.id,
+      serviceId: service.id,
+      providerId: service.user_id,
+      type: 'booking',
+      amount: service.price,
+      status: 'pending'
+    };
 
-      const response = await createBooking(bookingData);
+    console.log('📝 Creating booking with data:', bookingData);
+    const response = await createBooking(bookingData);
+    
+    console.log('✅ Booking response:', response);
+    
+    if (response.data) {
+      setSelectedService(null);
       
-      if (response.data) {
-        setSelectedService(null);
-        alert('Service booked successfully!');
-        navigate('/transactions');
+      // ✅ EMIT SOCKET EVENT TO NOTIFY TRANSACTION PAGE
+      if (socketRef.current) {
+        console.log('📢 Emitting booking-created event via Socket.IO');
+        socketRef.current.emit('booking-created', {
+          bookingId: response.data.id,
+          userId: user.id,
+          serviceId: service.id,
+          providerId: service.user_id,
+          status: 'pending',
+          price: service.price,
+          timestamp: new Date()
+        });
       }
-    } catch (error) {
-      console.error('Booking error:', error);
-      alert(error.response?.data?.message || 'Failed to book service. Please try again.');
+      
+      // Wait a bit for backend to process
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Navigate with refresh state
+      navigate('/transactions', { 
+        replace: true,
+        state: { 
+          refresh: true,
+          newBookingId: response.data.id
+        }
+      });
     }
-  };
+  } catch (error) {
+    console.error('Booking error:', error);
+    alert(error.response?.data?.message || 'Failed to book service. Please try again.');
+  }
+};
 
   return (
     <div className="bg-gradient-to-b from-blue-50 to-white min-h-screen flex flex-col lg:flex-row w-full">
@@ -815,19 +918,36 @@ const FindServices = () => {
                         <h2 className="font-semibold text-sm sm:text-base text-gray-900 line-clamp-2 h-10">
                           {service.title}
                         </h2>
-                        <div className="relative group flex-shrink-0">
-                          <button className="hover:bg-gray-100 p-1 rounded-lg transition-colors">
-                            <EllipsisVerticalIcon className="h-5 w-5 text-gray-500" />
+                        <div className="flex gap-1 flex-shrink-0">
+                          {/* Bookmark Button */}
+                          <button 
+                            onClick={(e) => toggleBookmark(service.id, e)}
+                            disabled={loadingBookmarks.has(service.id)}
+                            className={`hover:bg-gray-100 p-2 rounded-lg transition-all ${
+                              bookmarkedServices.has(service.id) 
+                                ? 'text-blue-600' 
+                                : 'text-gray-400'
+                            } ${loadingBookmarks.has(service.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={bookmarkedServices.has(service.id) ? 'Remove bookmark' : 'Bookmark this service'}
+                          >
+                            <BookmarkIcon className={`h-5 w-5 ${bookmarkedServices.has(service.id) ? 'fill-current' : ''}`} />
                           </button>
                           
-                          {/* Dropdown Menu */}
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 min-w-48">
-                            <button
-                              onClick={() => navigate(`/provider-profile/${service.user_id}`)}
-                              className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium first:rounded-t-lg"
-                            >
-                              View Profile
+                          {/* Menu Button */}
+                          <div className="relative group">
+                            <button className="hover:bg-gray-100 p-1 rounded-lg transition-colors">
+                              <EllipsisVerticalIcon className="h-5 w-5 text-gray-500" />
                             </button>
+                            
+                            {/* Dropdown Menu */}
+                            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 min-w-48">
+                              <button
+                                onClick={() => navigate(`/provider-profile/${service.user_id}`)}
+                                className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium first:rounded-t-lg"
+                              >
+                                View Profile
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>

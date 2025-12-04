@@ -74,14 +74,22 @@ export const createAnnouncement = async (announcementData) => {
     throw error;
   }
 };
-
 export const getAnnouncements = async () => {
   try {
-    const response = await api.get('/announcements');
-    return response;
+    console.log('📡 Fetching announcements from:', `${API_URL}/announcements`);
+    const response = await api.get('/announcements'); // ✅ Fixed: use 'api' not 'axiosInstance'
+    console.log('✅ Announcements response:', response.data);
+    
+    // ✅ Always return an array
+    if (Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    return [];
   } catch (error) {
-    console.error('Get announcements error:', error);
-    throw error;
+    console.error('❌ Error fetching announcements:', error);
+    return []; // ✅ Return empty array on error
   }
 };
 
@@ -105,6 +113,16 @@ export const updateAnnouncement = async (id, announcementData) => {
   }
 };
 
+export const restoreAnnouncement = async (id) => {
+  try {
+    const response = await api.post(`/announcements/${id}/restore`);
+    return response;
+  } catch (error) {
+    console.error('Restore announcement error:', error);
+    throw error;
+  }
+};
+
 export const createService = async (serviceData) => {
   try {
     const response = await api.post('/services/create', serviceData);
@@ -118,7 +136,7 @@ export const createService = async (serviceData) => {
 export const getUserServices = async (userId) => {
   try {
     const response = await api.get(`/services/user/${userId}`);
-    return response;
+    return response.data;
   } catch (error) {
     console.error('Get user services error:', error);
     throw error;
@@ -167,11 +185,12 @@ export const createBooking = async (bookingData) => {
 
 export const getUserBookings = async (userId) => {
   try {
-    // Fix the URL - remove the line break
-    const response = await api.get(`/services/bookings/${userId}`);
+    console.log('📡 Fetching bookings/transactions for user:', userId);
+    const response = await api.get(`/transactions/user/${userId}`);
+    console.log('✅ Bookings response:', response.data);
     return response;
   } catch (error) {
-    console.error('Get user bookings error:', error);
+    console.error('Error fetching bookings:', error);
     throw error;
   }
 };
@@ -216,7 +235,7 @@ export const updateTransactionStatus = async (bookingId, status) => {
 export const getUserFeedback = async (userId) => {
   try {
     const response = await api.get(`/feedback/user/${userId}`);
-    return response.data; // Should return the array directly
+    return response.data; 
   } catch (error) {
     console.error('Error in getUserFeedback:', error);
     throw error;
@@ -326,29 +345,36 @@ export const submitReport = async (reportData) => {
 
 export const getAllReports = async () => {
   try {
+    console.log('📝 Fetching all reports');
+    
     const response = await api.get('/reports/all');
-    console.log('API Response:', response);
+    
+    console.log('✅ Reports fetched:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Get all reports error:', error);
+    console.error('❌ Error fetching reports:', error.response?.data || error);
     throw error;
   }
 };
 
 export const updateReportStatus = async (reportId, statusData) => {
   try {
-    const response = await api.put(`/reports/${reportId}/status`, {
-      status: statusData.status,
-      violationType: statusData.violationType || null,
-      adminNotes: statusData.adminNotes || null
-    });
-    return response.data;
+    console.log('📝 Updating report status:', { reportId, statusData });
+    
+    const response = await api.put(`/reports/${reportId}/status`, statusData);
+    
+    console.log('✅ Update response:', response.data);
+    
+    if (response.data.success || response.status === 200) {
+      return response.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to update report');
+    }
   } catch (error) {
-    console.error('Update report status error:', error);
+    console.error('❌ Error updating report status:', error.response?.data || error);
     throw error;
   }
 };
-
 
 export const getUserReportHistory = async (userId) => {
   try {
@@ -360,16 +386,22 @@ export const getUserReportHistory = async (userId) => {
   }
 };
 
-export const notifyUser = async (userId, notification) => {
+export const notifyUser = async (userId, notificationData) => {
   try {
-    const response = await api.post(`/notifications/${userId}`, notification);
+    console.log('📧 Sending notification to user:', userId, notificationData);
+    
+    const response = await api.post(`/notifications/send`, {
+      user_id: userId,
+      ...notificationData
+    });
+    
+    console.log('✅ Notification sent');
     return response.data;
   } catch (error) {
-    console.error('Notify user error:', error);
-    throw error;
+    console.error('⚠️ Error sending notification (non-critical):', error);
+    return { success: false };
   }
 };
-
 
 export const getNotifications = async (userId) => {
   try {
@@ -450,7 +482,7 @@ export const markMessageAsRead = async (messageId) => {
   try {
     const response = await api.put(`/messages/mark-read/${messageId}`);
     return response.data;
-  } catch (markMessageAsReadError) {
+  } catch (error) {
     console.error('Mark as read error:', error);
     throw error;
   }
@@ -518,8 +550,90 @@ export const getConversationMessages = async (userId, otherUserId) => {
   }
 };
 
+export const bookmarkService = async (serviceId) => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    const response = await api.post(`/services/${serviceId}/bookmark`, {
+      userId: user?.id
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Bookmark service error:', error);
+    throw error;
+  }
+};
 
+export const unbookmarkService = async (serviceId) => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    const response = await api.delete(`/services/${serviceId}/bookmark`, {
+      data: {
+        userId: user?.id
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Unbookmark service error:', error);
+    throw error;
+  }
+};
 
+export const getSavedServices = async (userId) => {
+  try {
+    const response = await api.get(`/services/saved/${userId}`);
+    return response.data.data || [];
+  } catch (error) {
+    console.error('Get saved services error:', error);
+    throw error;
+  }
+};
 
+export const isServiceBookmarked = async (serviceId) => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    const response = await api.get(`/services/${serviceId}/is-bookmarked`, {
+      data: {
+        userId: user?.id
+      }
+    });
+    return response.data.isBookmarked;
+  } catch (error) {
+    console.error('Check bookmark error:', error);
+    return false;
+  }
+};
+
+// ✅ Get monthly earnings and spent
+export const getUserMonthlyStats = async (userId) => {
+  try {
+    const response = await api.get(`/transactions/monthly/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get monthly stats error:', error);
+    throw error;
+  }
+};
+
+// ✅ Get total earnings (all time)
+export const getUserEarnings = async (userId) => {
+  try {
+    const response = await api.get(`/transactions/earnings/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get earnings error:', error);
+    throw error;
+  }
+};
+
+// ✅ Get total spent (all time)
+export const getUserSpent = async (userId) => {
+  try {
+    const response = await api.get(`/transactions/spent/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get spent error:', error);
+    throw error;
+  }
+};
 
 export default api;

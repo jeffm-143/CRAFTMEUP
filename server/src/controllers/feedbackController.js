@@ -27,7 +27,8 @@ exports.getUserFeedback = async (req, res) => {
   try {
     const userId = req.params.userId;
     
-    // Get feedback GIVEN by user (as learner/student)
+    // ✅ Get feedback GIVEN by user (as learner/student)
+    // Only shows feedbacks for ACTIVE services (not deleted)
     const givenQuery = `
       SELECT 
         f.id,
@@ -39,16 +40,18 @@ exports.getUserFeedback = async (req, res) => {
         'given' as feedback_type,
         s.title as service_title,
         s.description as service_description,
+        s.deleted_at as service_deleted_at,
         s.user_id as provider_id,
         u.full_name as provider_name
       FROM feedback f
       LEFT JOIN services s ON f.service_id = s.id
       LEFT JOIN users u ON s.user_id = u.id
-      WHERE f.user_id = ?
+      WHERE f.user_id = ? AND f.deleted_at IS NULL AND s.deleted_at IS NULL
       ORDER BY f.created_at DESC
     `;
 
-    // Get feedback RECEIVED by user (as tutor/provider)
+    // ✅ Get feedback RECEIVED by user (as tutor/provider)
+    // Only shows feedbacks for ACTIVE services
     const receivedQuery = `
       SELECT 
         f.id,
@@ -60,11 +63,12 @@ exports.getUserFeedback = async (req, res) => {
         'received' as feedback_type,
         s.title as service_title,
         s.description as service_description,
+        s.deleted_at as service_deleted_at,
         u.full_name as user_full_name
       FROM feedback f
       LEFT JOIN services s ON f.service_id = s.id
       LEFT JOIN users u ON f.user_id = u.id
-      WHERE s.user_id = ?
+      WHERE s.user_id = ? AND f.deleted_at IS NULL AND s.deleted_at IS NULL 
       ORDER BY f.created_at DESC
     `;
 
@@ -92,11 +96,11 @@ exports.getUserFeedback = async (req, res) => {
   }
 };
 
-
 exports.getProviderFeedbacks = async (req, res) => {
     try {
         const { userId } = req.params;
         
+        // ✅ Only show feedbacks for ACTIVE services (not deleted)
         const [feedbacks] = await pool.execute(`
             SELECT 
                 f.id,
@@ -112,7 +116,9 @@ exports.getProviderFeedbacks = async (req, res) => {
             FROM feedback f
             JOIN users u ON f.user_id = u.id
             JOIN services s ON f.service_id = s.id
-            WHERE s.user_id = ?
+            WHERE s.user_id = ? 
+              AND f.deleted_at IS NULL 
+              AND s.deleted_at IS NULL
             ORDER BY f.created_at DESC
         `, [userId]);
 
@@ -121,4 +127,10 @@ exports.getProviderFeedbacks = async (req, res) => {
         console.error('Error fetching provider feedbacks:', error);
         res.status(500).json({ message: 'Failed to fetch feedbacks', error: error.message });
     }
+};
+
+module.exports = {
+    createFeedback: exports.createFeedback,
+    getUserFeedback: exports.getUserFeedback,
+    getProviderFeedbacks: exports.getProviderFeedbacks
 };

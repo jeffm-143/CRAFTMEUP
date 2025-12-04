@@ -31,7 +31,7 @@ exports.getAllReports = async (req, res) => {
       reason: report.reason,
       description: report.description,
       status: report.status || 'pending',
-      violation_type: report.violation_type,
+      violationType: report.violation_type,  // ✅ CHANGED: violation_type → violationType
       created_at: report.created_at,
       updated_at: report.updated_at
     }));
@@ -51,6 +51,14 @@ exports.submitReport = async (req, res) => {
   try {
     const { reported_user_id, reporter_id, reason, description } = req.body;
     
+    // ✅ ADD: Validation
+    if (!reported_user_id || !reporter_id || !reason || !description) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: reported_user_id, reporter_id, reason, description'
+      });
+    }
+
     const query = `
       INSERT INTO reports 
       (reported_user_id, reporter_id, reason, description, status, created_at) 
@@ -64,24 +72,30 @@ exports.submitReport = async (req, res) => {
       description
     ]);
 
+    console.log('Report submitted successfully:', result.insertId);
+
     res.status(201).json({
+      success: true,  // ✅ ADD: success flag
       message: 'Report submitted successfully',
       reportId: result.insertId
     });
   } catch (error) {
     console.error('Error submitting report:', error);
-    res.status(500).json({ error: 'Failed to submit report' });
+    res.status(500).json({ 
+      success: false,  // ✅ ADD: success flag
+      error: 'Failed to submit report',
+      details: error.message
+    });
   }
 };
 
 exports.updateReportStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, violationType } = req.body;
+    const { status, violationType } = req.body;  
     
-    console.log('Updating report:', { id, status, violationType }); // Add logging
+    console.log('Updating report:', { id, status, violationType });
 
-    // Validate required parameters
     if (!id || !status) {
       console.log('Missing parameters:', { id, status });
       return res.status(400).json({ 
@@ -99,7 +113,7 @@ exports.updateReportStatus = async (req, res) => {
       WHERE id = ?
     `;
     
-    const values = [status, violationType, id];
+    const values = [status, violationType || 'minor', id];  
     console.log('Executing query with values:', values);
 
     const [result] = await db.execute(query, values);
@@ -112,14 +126,13 @@ exports.updateReportStatus = async (req, res) => {
       });
     }
     
-    // Send success response
     res.status(200).json({ 
       success: true,
       message: 'Report status updated successfully',
       data: {
         id,
         status,
-        violationType,
+        violationType: violationType || 'minor',
         updatedAt: new Date()
       }
     });

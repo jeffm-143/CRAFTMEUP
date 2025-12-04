@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import io from 'socket.io-client';
 
 import {
   HomeIcon,
@@ -14,8 +15,10 @@ import {
   Bars3Icon,
   XMarkIcon,
   BookmarkIcon,
+  ArrowUpRightIcon,
+  ArrowDownLeftIcon,
 } from "@heroicons/react/24/outline";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FiAlertTriangle } from "react-icons/fi";
 import { createNotification } from '../../../services/api';
 import { getUserBookings, updateTransactionStatus, getWalletBalance, transferFunds } from '../../../services/api';
@@ -68,7 +71,7 @@ function ConfirmPayment({ booking, userWallet, onConfirm, onClose }) {
               disabled={remainingBalance < 0}
               className={`w-full ${
                 remainingBalance < 0 
-                  ? 'bg-gray-300' 
+                  ? 'bg-gray-300 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
               } text-white py-2.5 rounded-xl text-sm font-medium transition-all`}
             >
@@ -89,6 +92,7 @@ function ConfirmPayment({ booking, userWallet, onConfirm, onClose }) {
 
 export default function Transaction() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingBookings, setPendingBookings] = useState([]);
@@ -97,6 +101,10 @@ export default function Transaction() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [userWallet, setUserWallet] = useState(0);
   const [userData, setUserData] = useState(null);
+  const [showPastTransactionsModal, setShowPastTransactionsModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState('');
+  const socketRef = useRef(null);
 
   const role = userData?.role?.toLowerCase() || '';
 
@@ -142,41 +150,192 @@ export default function Transaction() {
     ];
   })();
 
+  // ✅ Determine if transaction is earning or spent
+  const getTransactionType = (booking) => {
+    if (booking.is_provider) {
+      return 'earning';
+    } else {
+      return 'spent';
+    }
+  };
+
+  // ✅ Get styling based on transaction type
+  const getTransactionStyle = (booking) => {
+    const type = getTransactionType(booking);
+    if (type === 'earning') {
+      return {
+        bgColor: 'bg-green-50',
+        borderColor: 'border-green-200',
+        amountColor: 'text-green-600',
+        icon: <ArrowDownLeftIcon className="h-5 w-5 text-green-600" />,
+        prefix: '+',
+        label: '↓ Income'
+      };
+    } else {
+      return {
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-200',
+        amountColor: 'text-red-600',
+        icon: <ArrowUpRightIcon className="h-5 w-5 text-red-600" />,
+        prefix: '-',
+        label: '↑ Expense'
+      };
+    }
+  };
+
+  const refreshTransactions = async () => {
+  try {
+    setIsLoading(true);
+    await Promise.all([
+      fetchUserBookings(),
+      fetchWalletBalance()
+    ]);
+    setIsLoading(false);
+  } catch (error) {
+    console.error('Error refreshing:', error);
+    setIsLoading(false);
+  }
+};
+
+  // ✅ Initialize user data
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
   }, []);
 
+  // ✅ Fetch data when component mounts or when returning from navigation
   useEffect(() => {
-    fetchUserBookings();
-    fetchWalletBalance();
-  }, []);
+    if (userData?.id) {
+      setIsLoading(true);
+      Promise.all([
+        fetchUserBookings(),
+        fetchWalletBalance()
+      ]).then(() => {
+        setIsLoading(false);
+      });
+    }
+  }, [userData?.id]);
+
+  // ✅ Show success message if coming from booking
+  useEffect(() => {
+    if (location.state?.refresh) {
+      setSuccessMessage('✅ Service booked successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }
+  }, [location.state]);
+
+  // ✅ Listen for page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && userData?.id) {
+        console.log('📄 Page became visible, refreshing transactions...');
+        fetchUserBookings();
+        fetchWalletBalance();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [userData?.id]);
+
+  // Socket.IO connection
+  useEffect(() => {
+    if (!userData?.id) return;
+
+    const newSocket = io('http://localhost:5000', {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
+
+    socketRef.current = newSocket;
+
+    newSocket.on('connect', () => {
+      console.log('🔌 Connected to server');
+      newSocket.emit('user-online', userData.id);
+    });
+
+newSocket.on('booking-created', (data) => {
+  console.log('📢 New booking created via socket:', data);
+  // Refresh transactions immediately
+  if (userData?.id === data.userId || userData?.id === data.providerId) {
+    console.log('🔄 Refreshing transactions due to new booking');
+    refreshTransactions();
+  }
+});
+
+    newSocket.on('booking-updated', (data) => {
+      console.log('📢 Booking updated:', data);
+      fetchUserBookings();
+      fetchWalletBalance();
+    });
+
+    newSocket.on('transaction-status-changed', (data) => {
+      console.log('📢 Transaction status changed:', data);
+      fetchUserBookings();
+    });
+
+    newSocket.on('payment-confirmed', (data) => {
+      console.log('📢 Payment confirmed:', data);
+      fetchUserBookings();
+      fetchWalletBalance();
+    });
+
+    newSocket.on('wallet-updated', (data) => {
+      console.log('📢 Wallet updated:', data);
+      fetchWalletBalance();
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('❌ Disconnected from server');
+    });
+
+    return () => {
+      if (newSocket) {
+        newSocket.emit('user-offline', userData.id);
+        newSocket.disconnect();
+      }
+    };
+  }, [userData?.id]);
 
   const createTutorRequestNotification = async (tutorId, learnerName) => {
-    await createNotification({
-      userId: tutorId,
-      type: 'tutor_request',
-      title: 'New Tutor Request',
-      content: `You got a Tutor request from ${learnerName}`
-    });
+    try {
+      await createNotification({
+        userId: tutorId,
+        type: 'tutor_request',
+        title: 'New Tutor Request',
+        content: `You got a Tutor request from ${learnerName}`
+      });
+    } catch (error) {
+      console.error('Error creating notification:', error);
+    }
   };
 
   const createRequestAcceptedNotification = async (learnerId, tutorName) => {
-    await createNotification({
-      userId: learnerId,
-      type: 'request_accepted',
-      title: 'Tutor Request Accepted',
-      content: `Your tutor request has been accepted by ${tutorName}`,
-    });
+    try {
+      await createNotification({
+        userId: learnerId,
+        type: 'request_accepted',
+        title: 'Tutor Request Accepted',
+        content: `Your tutor request has been accepted by ${tutorName}`,
+      });
+    } catch (error) {
+      console.error('Error creating notification:', error);
+    }
   };
 
   const createPaymentConfirmedNotification = async (tutorId, learnerName) => {
-    await createNotification({
-      userId: tutorId,
-      type: 'payment_confirmed',
-      title: 'Payment Confirmed',
-      content: `Payment has been confirmed by ${learnerName}`,
-    });
+    try {
+      await createNotification({
+        userId: tutorId,
+        type: 'payment_confirmed',
+        title: 'Payment Confirmed',
+        content: `Payment has been confirmed by ${learnerName}`,
+      });
+    } catch (error) {
+      console.error('Error creating notification:', error);
+    }
   };
 
   const fetchUserBookings = async () => {
@@ -190,6 +349,8 @@ export default function Transaction() {
       const response = await getUserBookings(user.id);
       const data = response?.data ?? response;
       const bookings = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+
+      console.log('✅ Bookings fetched:', bookings);
 
       const ongoing = [];
       const pending = [];
@@ -231,6 +392,7 @@ export default function Transaction() {
       const user = JSON.parse(localStorage.getItem('user'));
       const response = await getWalletBalance(user.id);
       setUserWallet(response.data.balance);
+      console.log('✅ Wallet balance fetched:', response.data.balance);
     } catch (error) {
       console.error('Error fetching wallet balance:', error);
     }
@@ -239,11 +401,20 @@ export default function Transaction() {
   const handleMarkReady = async (bookingId) => {
     try {
       await updateTransactionStatus(bookingId, 'ready');
+      
+      if (socketRef.current) {
+        socketRef.current.emit('booking-status-changed', {
+          bookingId,
+          status: 'ready',
+          userId: userData.id
+        });
+      }
+      
       await fetchUserBookings();
-      alert('Service marked as ready for completion');
+      alert('✅ Service marked as ready for completion');
     } catch (error) {
       console.error('Error marking service as ready:', error);
-      alert('Failed to update service status');
+      alert('❌ Failed to update service status');
     }
   };
 
@@ -262,7 +433,7 @@ export default function Transaction() {
       );
       
       if (selectedBooking.is_provider) {
-        alert('Error: Providers cannot confirm payment');
+        alert('❌ Error: Providers cannot confirm payment');
         return;
       }
 
@@ -278,6 +449,15 @@ export default function Transaction() {
 
       await transferFunds(paymentData);
       
+      if (socketRef.current) {
+        socketRef.current.emit('payment-completed', {
+          bookingId: selectedBooking.id,
+          fromUserId,
+          toUserId,
+          amount: selectedBooking.price
+        });
+      }
+      
       await fetchWalletBalance();
       await fetchUserBookings();
       
@@ -291,7 +471,7 @@ export default function Transaction() {
     } catch (error) {
       console.error('Payment error details:', error);
       const errorMessage = error.response?.data?.message || 'Failed to process payment. Please try again.';
-      alert(errorMessage);
+      alert('❌ ' + errorMessage);
     }
   };
 
@@ -300,22 +480,40 @@ export default function Transaction() {
       await updateTransactionStatus(bookingId, 'ongoing');
       const booking = pendingBookings.find(b => b.id === bookingId);
       await createRequestAcceptedNotification(booking.user_id, booking.provider_name);
+      
+      if (socketRef.current) {
+        socketRef.current.emit('booking-status-changed', {
+          bookingId,
+          status: 'ongoing',
+          userId: userData.id
+        });
+      }
+      
       await fetchUserBookings();
-      alert('Booking accepted successfully');
+      alert('✅ Booking accepted successfully');
     } catch (error) {
       console.error('Error accepting booking:', error);
-      alert('Failed to accept booking');
+      alert('❌ Failed to accept booking');
     }
   };
 
   const handleRejectBooking = async (bookingId) => {
     try {
       await updateTransactionStatus(bookingId, 'rejected');
+      
+      if (socketRef.current) {
+        socketRef.current.emit('booking-status-changed', {
+          bookingId,
+          status: 'rejected',
+          userId: userData.id
+        });
+      }
+      
       await fetchUserBookings();
-      alert('Booking rejected');
+      alert('✅ Booking rejected');
     } catch (error) {
       console.error('Error rejecting booking:', error);
-      alert('Failed to reject booking');
+      alert('❌ Failed to reject booking');
     }
   };
 
@@ -330,153 +528,202 @@ export default function Transaction() {
     return colors[status] || 'bg-gray-100 text-gray-700';
   };
 
-  const renderBooking = (booking) => (
-    <div key={booking.id} className="border border-gray-100 rounded-2xl p-3 sm:p-4 shadow-sm bg-white hover:shadow-md transition-all flex flex-col">
-      {/* Top section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-xs sm:text-base text-gray-900 truncate">{booking.service_title}</h3>
-          <p className="text-xs text-gray-600 mt-1">
-            {booking.is_provider ? `Requested by: ${booking.requester_name}` : `Provider: ${booking.provider_name}`}
-          </p>
+  const renderBooking = (booking) => {
+    const style = getTransactionStyle(booking);
+    
+    return (
+      <div key={booking.id} className={`border-2 ${style.borderColor} ${style.bgColor} rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all flex flex-col`}>
+        {/* Top section with icon and info */}
+        <div className="flex items-start gap-3 mb-3">
+          <div className="flex-shrink-0 mt-1">
+            {style.icon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-xs sm:text-base text-gray-900 truncate">{booking.service_title}</h3>
+            <p className="text-xs text-gray-600 mt-1">
+              {booking.is_provider ? `Requested by: ${booking.requester_name}` : `Provider: ${booking.provider_name}`}
+            </p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className={`font-semibold text-xs sm:text-base ${style.amountColor}`}>
+              {style.prefix}SC {Number(booking.price).toFixed(2)}
+            </p>
+          </div>
         </div>
-        <div className="text-right flex-shrink-0">
-          <p className="font-semibold text-xs sm:text-base">SC {Number(booking.price).toFixed(2)}</p>
-        </div>
-      </div>
 
-      {/* Description */}
-      {booking.description && (
-        <p className="text-gray-500 text-xs line-clamp-2 mb-2">{booking.description}</p>
-      )}
+        {/* Description */}
+        {booking.description && (
+          <p className="text-gray-500 text-xs line-clamp-2 mb-2 pl-8">{booking.description}</p>
+        )}
 
-      {/* Status and date */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 pb-3 border-t border-gray-100">
-        <div className="flex items-center space-x-2">
-          <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full ${getStatusColor(booking.status)}`}>
-            <span className={`w-2 h-2 mr-1.5 rounded-full ${
-              booking.status === 'pending' ? 'bg-yellow-500' :
-              booking.status === 'ongoing' ? 'bg-blue-500' :
-              booking.status === 'ready' ? 'bg-purple-500' :
-              booking.status === 'completed' ? 'bg-green-500' :
-              'bg-red-500'
-            }`}></span>
-            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+        {/* Transaction type label */}
+        <div className="mb-3 pl-8">
+          <span className={`inline-block text-xs font-semibold px-2 py-1 rounded ${
+            booking.is_provider
+              ? 'bg-green-200 text-green-800'
+              : 'bg-red-200 text-red-800'
+          }`}>
+            {style.label}
           </span>
         </div>
-        <p className="text-gray-400 text-xs">
-          {new Date(booking.created_at).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          })}
-        </p>
-      </div>
 
-      {/* Action Buttons Section */}
-      <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
-        {booking.is_provider && booking.status === 'ongoing' && (
-          <button
-            onClick={() => handleMarkReady(booking.id)}
-            className="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-xs sm:text-sm font-medium transition-colors"
-          >
-            Mark Ready
-          </button>
-        )}
+        {/* Status and date */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 pb-3 border-t border-gray-200">
+          <div className="flex items-center space-x-2">
+            <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full ${getStatusColor(booking.status)}`}>
+              <span className={`w-2 h-2 mr-1.5 rounded-full ${
+                booking.status === 'pending' ? 'bg-yellow-500' :
+                booking.status === 'ongoing' ? 'bg-blue-500' :
+                booking.status === 'ready' ? 'bg-purple-500' :
+                booking.status === 'completed' ? 'bg-green-500' :
+                'bg-red-500'
+              }`}></span>
+              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+            </span>
+          </div>
+          <p className="text-gray-400 text-xs">
+            {new Date(booking.created_at).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit'
+            })}
+          </p>
+        </div>
 
-        {booking.is_provider && booking.status === 'ready' && (
-          <div className="flex-1 px-3 py-2 text-gray-500 text-xs text-center bg-gray-50 rounded-lg">
-            Waiting for completion
+        {/* Action Buttons */}
+        {(booking.is_provider || (!booking.is_provider && booking.status === 'ready')) && (
+          <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+            {booking.is_provider && booking.status === 'ongoing' && (
+              <button
+                onClick={() => handleMarkReady(booking.id)}
+                className="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-xs sm:text-sm font-medium transition-colors"
+              >
+                Mark Ready
+              </button>
+            )}
+
+            {booking.is_provider && booking.status === 'ready' && (
+              <div className="flex-1 px-3 py-2 text-gray-500 text-xs text-center bg-gray-100 rounded-lg">
+                Waiting for completion
+              </div>
+            )}
+
+            {booking.is_provider && booking.status === 'pending' && (
+              <div className="flex gap-1.5 sm:gap-2 w-full">
+                <button
+                  onClick={() => handleAcceptBooking(booking.id)}
+                  className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => handleRejectBooking(booking.id)}
+                  className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs sm:text-sm font-medium transition-colors"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+
+            {!booking.is_provider && booking.status === 'ready' && (
+              <button
+                onClick={() => handleConfirmCompletion(booking)}
+                className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
+              >
+                Confirm Completion
+              </button>
+            )}
           </div>
         )}
-
-        {!booking.is_provider && booking.status === 'ready' && (
-          <button
-            onClick={() => handleConfirmCompletion(booking)}
-            className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
-          >
-            Confirm Completion
-          </button>
-        )}
-
-        {booking.is_provider && booking.status === 'pending' && (
-          <div className="flex gap-1.5 sm:gap-2 w-full">
-            <button
-              onClick={() => handleAcceptBooking(booking.id)}
-              className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
-            >
-              Accept
-            </button>
-            <button
-              onClick={() => handleRejectBooking(booking.id)}
-              className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs sm:text-sm font-medium transition-colors"
-            >
-              Reject
-            </button>
-          </div>
-        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderBookings = () => (
     <div className="flex-1 overflow-y-auto">
-      <div className="w-full px-2 sm:px-3 lg:px-4 py-2 sm:py-3">
-        <div className="mb-6">
-          <h2 className="text-gray-700 text-sm sm:text-base font-semibold mb-3 px-2">Current Transactions</h2>
-          {ongoingBookings.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
-              {ongoingBookings.map(renderBooking)}
-            </div>
-          ) : (
-            <div className="text-center py-8 bg-gray-50 rounded-xl">
-              <p className="text-gray-500 text-sm">No ongoing transactions</p>
+      {isLoading ? (
+        // ✅ Show loading state
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500 text-sm">Loading transactions...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full px-2 sm:px-3 lg:px-4 py-2 sm:py-3">
+          {/* ✅ Success message */}
+          {successMessage && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+              {successMessage}
             </div>
           )}
-        </div>
 
-        <div className="mb-6">
-          <h2 className="text-gray-700 text-sm sm:text-base font-semibold mb-3 px-2">Pending Transactions</h2>
-          {pendingBookings.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
-              {pendingBookings.map(renderBooking)}
-            </div>
-          ) : (
-            <div className="text-center py-8 bg-gray-50 rounded-xl">
-              <p className="text-gray-500 text-sm">No pending transactions</p>
-            </div>
-          )}
-        </div>
+          <div className="mb-6">
+            <h2 className="text-gray-700 text-sm sm:text-base font-semibold mb-3 px-2">Current Transactions</h2>
+            {ongoingBookings.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
+                {ongoingBookings.map(renderBooking)}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-xl">
+                <p className="text-gray-500 text-sm">No ongoing transactions</p>
+              </div>
+            )}
+          </div>
 
-        <div>
-          <h2 className="text-gray-700 text-sm sm:text-base font-semibold mb-3 px-2">Past Transactions</h2>
-          {completedBookings.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
-              {completedBookings.map(renderBooking)}
-            </div>
-          ) : (
-            <div className="text-center py-8 bg-gray-50 rounded-xl">
-              <p className="text-gray-500 text-sm">No past transactions</p>
-            </div>
-          )}
-        </div>
+          <div className="mb-6">
+            <h2 className="text-gray-700 text-sm sm:text-base font-semibold mb-3 px-2">Pending Transactions</h2>
+            {pendingBookings.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
+                {pendingBookings.map(renderBooking)}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-xl">
+                <p className="text-gray-500 text-sm">No pending transactions</p>
+              </div>
+            )}
+          </div>
 
-        {/* Bottom spacing */}
-        <div className="h-2 sm:h-3"></div>
-      </div>
+          <div>
+            <h2 className="text-gray-700 text-sm sm:text-base font-semibold mb-3 px-2">Past Transactions</h2>
+            {completedBookings.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
+                  {completedBookings.slice(0, 2).map(renderBooking)}
+                </div>
+                
+                {completedBookings.length > 2 && (
+                  <div className="mt-4 text-center">
+                    <button
+                      onClick={() => setShowPastTransactionsModal(true)}
+                      className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 text-sm font-medium transition-all shadow-sm hover:shadow-md"
+                    >
+                      View All Past Transactions ({completedBookings.length})
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-xl">
+                <p className="text-gray-500 text-sm">No past transactions</p>
+              </div>
+            )}
+          </div>
+
+          <div className="h-2 sm:h-3"></div>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div className="bg-gradient-to-b from-blue-50 to-white min-h-screen flex flex-col lg:flex-row w-full">
-      {/* Sidebar - Desktop (always visible) */}
+      {/* Sidebar - Desktop */}
       <div className="hidden lg:flex fixed inset-y-0 left-0 bg-gradient-to-b from-gray-50 to-white w-64 flex-col shadow-xl border-r z-30">
-        {/* Header - Fixed at top */}
         <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600">
           <h2 className="font-semibold text-white text-lg">Menu</h2>
         </div>
 
-        {/* Navigation - Scrollable */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <button
@@ -493,9 +740,8 @@ export default function Transaction() {
         </nav>
       </div>
 
-      {/* Sidebar - Mobile (toggle-based) */}
+      {/* Sidebar - Mobile */}
       <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} bg-gradient-to-b from-gray-50 to-white w-64 transition-transform duration-300 ease-in-out z-40 lg:hidden flex flex-col shadow-xl border-r`}>
-        {/* Header - Fixed at top */}
         <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex justify-between items-center">
           <h2 className="font-semibold text-white">Menu</h2>
           <button 
@@ -506,7 +752,6 @@ export default function Transaction() {
           </button>
         </div>
 
-        {/* Navigation - Scrollable */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <button
@@ -526,7 +771,6 @@ export default function Transaction() {
         </nav>
       </div>
 
-      {/* Overlay */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
@@ -572,6 +816,29 @@ export default function Transaction() {
             setSelectedBooking(null);
           }}
         />
+      )}
+
+      {/* Past Transactions Modal */}
+      {showPastTransactionsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div className="p-4 sm:p-5 border-b flex justify-between items-center">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">All Past Transactions</h2>
+              <button 
+                onClick={() => setShowPastTransactionsModal(false)} 
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                {completedBookings.map(renderBooking)}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

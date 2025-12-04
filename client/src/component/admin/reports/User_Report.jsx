@@ -11,9 +11,12 @@ import AdminSidebar from "../../AdminSidebar";
 import { getAllReports, updateReportStatus, getUserReportHistory, notifyUser } from "../../../services/api";
 
 const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, violationTypes, getStatusBadgeClass }) => {
+  const [selectedViolationType, setSelectedViolationType] = useState(selectedReport?.violationType || 'minor');
+  
   if (!selectedReport) return null;
 
-  const isResolved = selectedReport.status && selectedReport.status !== 'pending';
+  // ✅ FIX: Check if resolved - include all resolved statuses
+  const isResolved = selectedReport.status && selectedReport.status !== 'pending' && selectedReport.status !== null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -50,40 +53,80 @@ const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, 
           )}
         </div>
 
-        <div className="mb-6">
-          <h4 className="font-medium text-gray-700 mb-2">Violation Type</h4>
-          <div className="p-2 bg-gray-50 rounded-lg border">
-            <p className="text-gray-600">{selectedReport.violationType || 'Not specified'}</p>
-            <div className="mt-2">
-              <h5 className="text-sm text-gray-600">Subcategories:</h5>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {violationTypes[selectedReport.violationType || 'minor']?.map(type => (
-                  <span key={type} className="px-2 py-1 bg-gray-100 rounded-full text-xs">
-                    {type.replace('_', ' ')}
+        {/* ✅ FIX: Show violation type selector ONLY if not resolved */}
+        {!isResolved && (
+          <div className="mb-6">
+            <h4 className="font-medium text-gray-700 mb-3">Select Violation Type</h4>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {Object.keys(violationTypes).map(type => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedViolationType(type)}
+                  className={`p-3 rounded-lg border-2 transition-all capitalize font-medium text-sm ${
+                    selectedViolationType === type
+                      ? 'border-blue-500 bg-blue-50 text-blue-600'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+
+            {/* Subcategories Display */}
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Subcategories:</h5>
+              <div className="flex flex-wrap gap-2">
+                {violationTypes[selectedViolationType]?.map(subType => (
+                  <span key={subType} className="px-3 py-1 bg-white border border-gray-200 rounded-full text-xs">
+                    {subType.replace('_', ' ')}
                   </span>
                 ))}
               </div>
             </div>
           </div>
-        </div>
+        )}
 
+        {/* ✅ FIX: Display violation type if already resolved */}
+        {isResolved && (
+          <div className="mb-6">
+            <h4 className="font-medium text-gray-700 mb-2">Violation Type</h4>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <p className="text-gray-600 capitalize font-medium">
+                {selectedReport.violationType || 'Not specified'}
+              </p>
+              <div className="mt-2">
+                <h5 className="text-sm text-gray-600">Subcategories:</h5>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {violationTypes[selectedReport.violationType || 'minor']?.map(type => (
+                    <span key={type} className="px-2 py-1 bg-gray-100 rounded-full text-xs">
+                      {type.replace('_', ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ FIX: Pass violationType to resolve functions */}
         {!isResolved && (
           <div className="flex justify-end space-x-3">
             <button
-              onClick={() => onResolve(selectedReport.id, 'invalid')}
-              className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50"
+              onClick={() => onResolve(selectedReport.id, 'invalid', selectedViolationType)}
+              className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50 font-medium"
             >
               Mark Invalid
             </button>
             <button
-              onClick={() => onResolve(selectedReport.id, 'warning')}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+              onClick={() => onResolve(selectedReport.id, 'warning', selectedViolationType)}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium"
             >
               Issue Warning
             </button>
             <button
-              onClick={() => onResolve(selectedReport.id, 'suspended')}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+              onClick={() => onResolve(selectedReport.id, 'suspended', selectedViolationType)}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium"
             >
               Suspend User
             </button>
@@ -91,23 +134,24 @@ const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, 
         )}
 
         {isResolved && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-medium text-gray-700 mb-2">Resolution Details</h4>
-              <p className="text-sm text-gray-600">Status: 
-                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(selectedReport.status)}`}>
-                  {selectedReport.status}
-                </span>
-              </p>
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h4 className="font-medium text-gray-700 mb-2">Resolution Details</h4>
+            <p className="text-sm text-gray-600">
+              Status: 
+              <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(selectedReport.status)}`}>
+                {selectedReport.status}
+              </span>
+            </p>
+            <p className="text-sm text-gray-600 mt-1">
+              Resolved on: {selectedReport.updated_at ? new Date(selectedReport.updated_at).toLocaleString() : 'Not resolved'}
+            </p>
+            {selectedReport.adminNotes && (
               <p className="text-sm text-gray-600 mt-1">
-                Resolved on: {selectedReport.updated_at ? new Date(selectedReport.updated_at).toLocaleString() : 'Not resolved'}
+                Notes: {selectedReport.adminNotes}
               </p>
-              {selectedReport.adminNotes && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Notes: {selectedReport.adminNotes}
-                </p>
-              )}
-            </div>
-          )}
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -148,8 +192,9 @@ export default function UserReports() {
       
       setReports(response);
       
-      const pending = response.filter(r => r.status === 'pending' || !r.status).length;
-      const resolved = response.filter(r => r.status === 'resolved').length;
+      // ✅ FIX: Count all non-pending as resolved
+      const pending = response.filter(r => !r.status || r.status === 'pending').length;
+      const resolved = response.filter(r => r.status && r.status !== 'pending').length;
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       const thisWeek = response.filter(r => new Date(r.created_at) > oneWeekAgo).length;
@@ -178,39 +223,50 @@ export default function UserReports() {
     }
   };
 
-  const handleResolveReport = async (reportId, resolution) => {
+  // ✅ FIX: Accept violationType parameter
+  const handleResolveReport = async (reportId, resolution, violationType = 'minor') => {
     try {
-      console.log('Resolving report:', reportId, resolution);
+      console.log('Resolving report:', { reportId, resolution, violationType });
 
       const statusData = {
         status: resolution,
-        violationType: selectedReport.violationType,
+        violationType: violationType || 'minor',  // ✅ ENSURE violationType is set
         adminNotes: resolution === 'invalid' 
           ? 'No violation found' 
-          : `${selectedReport.violationType} violation confirmed`,
+          : `${violationType} violation confirmed - ${resolution} action taken`,
         resolvedAt: new Date().toISOString()
       };
 
+      console.log('📝 Sending status data:', statusData);
+
       await updateReportStatus(reportId, statusData);
 
-      await Promise.all([
+      // Notify users
+      const notifications = [
         notifyUser(selectedReport.reporter_id, {
           type: 'report_resolved',
           message: `Your report has been reviewed and marked as ${resolution}.`
-        }),
-        resolution !== 'invalid' && notifyUser(selectedReport.reported_user_id, {
-          type: resolution,
-          message: `Your account has received a ${resolution} due to ${selectedReport.violationType} violation.`
         })
-      ].filter(Boolean));
+      ];
+
+      if (resolution !== 'invalid') {
+        notifications.push(
+          notifyUser(selectedReport.reported_user_id, {
+            type: resolution,
+            message: `Your account has received a ${resolution} due to ${violationType} violation.`
+          })
+        );
+      }
+
+      await Promise.all(notifications);
 
       setShowDetailModal(false);
       await fetchReports();
       
-      alert(`Report has been marked as ${resolution}`);
+      alert(`✅ Report has been marked as ${resolution}`);
       
     } catch (error) {
-      console.error('Error resolving report:', error);
+      console.error('❌ Error resolving report:', error);
       alert('Failed to resolve report. Please try again.');
     }
   };
@@ -219,32 +275,35 @@ export default function UserReports() {
     switch(status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-600';
-      case 'resolved':
-        return 'bg-green-100 text-green-600';
-      case 'suspended':
-        return 'bg-red-100 text-red-600';
       case 'invalid':
         return 'bg-gray-100 text-gray-600';
       case 'warning':
         return 'bg-orange-100 text-orange-600';
+      case 'suspended':
+        return 'bg-red-100 text-red-600';
       default:
         return 'bg-gray-100 text-gray-600';
     }
   };
 
-  const filteredReports = reports.filter(report => 
-    (report.reported_user_name?.toLowerCase().includes(search.toLowerCase()) ||
-    report.reporter_name?.toLowerCase().includes(search.toLowerCase()) ||
-    report.reason?.toLowerCase().includes(search.toLowerCase()))
-    &&
-    (showHistory 
-      ? report.status !== 'pending' 
-      : report.status === 'pending' || !report.status)
-  );
+  // ✅ FIX: Filter logic for pending vs resolved
+  const filteredReports = reports.filter(report => {
+    const matchesSearch = 
+      report.reported_user_name?.toLowerCase().includes(search.toLowerCase()) ||
+      report.reporter_name?.toLowerCase().includes(search.toLowerCase()) ||
+      report.reason?.toLowerCase().includes(search.toLowerCase());
+
+    const isPending = !report.status || report.status === 'pending';
+    const isResolved = report.status && report.status !== 'pending';
+
+    const matchesFilter = showHistory ? isResolved : isPending;
+
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
-      {/* Sidebar - CHANGED ONLY THIS */}
+      {/* Sidebar */}
       <AdminSidebar />
 
       {/* Main Content */}
@@ -297,22 +356,26 @@ export default function UserReports() {
               />
             </div>
             <button
-                onClick={() => setShowHistory(!showHistory)}
-                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                  showHistory 
-                    ? 'bg-blue-100 text-blue-600' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <ClockIcon className="w-5 h-5 mr-2" />
-                {showHistory ? 'Pending Reports' : 'History'}
-              </button>
+              onClick={() => setShowHistory(!showHistory)}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                showHistory 
+                  ? 'bg-blue-100 text-blue-600' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <ClockIcon className="w-5 h-5 mr-2" />
+              {showHistory ? 'Pending Reports' : 'History'}
+            </button>
           </div>
 
           {/* Reports Table */}
           <div className="overflow-x-auto">
             {isLoading ? (
               <div className="text-center py-8">Loading reports...</div>
+            ) : filteredReports.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No reports found
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -355,14 +418,12 @@ export default function UserReports() {
                         </span>
                       </td>
                       <td className="py-3">
-                        <div className="flex flex-col space-y-2">
-                          <button 
-                            className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
-                            onClick={() => handleViewDetails(report)}
-                          >
-                            View Details
-                          </button>
-                        </div>
+                        <button 
+                          className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
+                          onClick={() => handleViewDetails(report)}
+                        >
+                          View Details
+                        </button>
                       </td>
                     </tr>
                   ))}

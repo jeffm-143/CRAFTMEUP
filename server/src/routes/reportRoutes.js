@@ -17,8 +17,16 @@ router.get('/debug', async (req, res) => {
   }
 });
 
+// ✅ GET all reports
 router.get('/all', reportController.getAllReports);
+
+// ✅ POST submit report
 router.post('/submit', reportController.submitReport);
+
+// ✅ PUT update report status (CORRECT PATH)
 router.put('/:id/status', reportController.updateReportStatus);
+
+// ✅ GET user report history
+router.get('/user/:userId', reportController.getUserReportHistory);
 
 module.exports = router;

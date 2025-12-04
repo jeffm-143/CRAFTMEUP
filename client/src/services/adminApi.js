@@ -40,4 +40,24 @@ export const getAdminReports = async (token) => {
   };
 };
 
+export const deleteAnnouncement = async (announcementId) => {
+  try {
+    const response = await axiosInstance.delete(`/api/announcements/${announcementId}`);
+    return response;
+  } catch (error) {
+    console.error('Error deleting announcement:', error);
+    throw error;
+  }
+};
+
+export const restoreAnnouncement = async (announcementId) => {
+  try {
+    const response = await axiosInstance.post(`/api/announcements/${announcementId}/restore`);
+    return response;
+  } catch (error) {
+    console.error('Error restoring announcement:', error);
+    throw error;
+  }
+};
+
 export default api;

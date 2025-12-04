@@ -17,15 +17,13 @@ import AdminSidebar from "../../AdminSidebar";
 export default function Announcements() {
   const navigate = useNavigate();
 
-
-
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     targetAudience: 'All Users',
     expirationDate: ''
   });
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState([]); // ✅ Initialize as empty array
   const [loading, setLoading] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
 
@@ -35,10 +33,16 @@ export default function Announcements() {
 
   const fetchAnnouncements = async () => {
     try {
-      const response = await getAnnouncements();
-      setAnnouncements(response.data);
+      console.log('📋 Fetching announcements...');
+      const data = await getAnnouncements();
+      
+      // ✅ Ensure it's always an array
+      const validAnnouncements = Array.isArray(data) ? data : [];
+      setAnnouncements(validAnnouncements);
+      console.log('✅ Announcements loaded:', validAnnouncements);
     } catch (error) {
-      console.error('Error fetching announcements:', error);
+      console.error('❌ Error fetching announcements:', error);
+      setAnnouncements([]); // ✅ Set empty array on error
     }
   };
 
@@ -89,6 +93,9 @@ export default function Announcements() {
     }
   };
 
+  // ✅ Safely handle announcements array
+  const validAnnouncements = Array.isArray(announcements) ? announcements : [];
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Sidebar */}
@@ -124,7 +131,9 @@ export default function Announcements() {
           <div className="grid grid-cols-3 gap-6">
             {/* Form Section */}
             <div className="col-span-2 bg-white p-6 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">Create New Announcement</h2>
+              <h2 className="text-lg font-semibold mb-4">
+                {editingAnnouncement ? 'Edit Announcement' : 'Create New Announcement'}
+              </h2>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Title */}
@@ -138,6 +147,7 @@ export default function Announcements() {
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="w-full border rounded-md px-3 py-2 text-sm"
+                    required
                   />
                 </div>
 
@@ -150,9 +160,10 @@ export default function Announcements() {
                     value={formData.content}
                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                     className="w-full border rounded-md px-3 py-2 text-sm"
+                    required
                   ></textarea>
                   <div className="flex justify-end text-xs text-gray-400 mt-1">
-                    0/1000 characters
+                    {formData.content.length}/1000 characters
                   </div>
                 </div>
 
@@ -188,7 +199,7 @@ export default function Announcements() {
                         checked={formData.targetAudience === 'Learners Only'}
                         onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
                       />
-                      <span>Requesters Only</span>
+                      <span>Learners Only</span>
                     </label>
                   </div>
                 </div>
@@ -214,11 +225,28 @@ export default function Announcements() {
                 <div className="flex space-x-3 mt-4">
                   <button
                     type="submit"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
                     disabled={loading}
                   >
-                    {loading ? 'Publishing...' : 'Publish Announcement'}
+                    {loading ? 'Publishing...' : editingAnnouncement ? 'Update Announcement' : 'Publish Announcement'}
                   </button>
+                  {editingAnnouncement && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingAnnouncement(null);
+                        setFormData({
+                          title: '',
+                          content: '',
+                          targetAudience: 'All Users',
+                          expirationDate: ''
+                        });
+                      }}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-400 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </form>
             </div>
@@ -241,44 +269,48 @@ export default function Announcements() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {announcements.map((a) => (
-                  <div key={a.id} className="border-b pb-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-sm font-medium">{a.title}</h3>
-                        <p className="text-xs text-gray-500">
-                          {new Date(a.created_at).toLocaleDateString()} • {a.target_audience}
-                        </p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(a)}
-                          className="p-1 hover:bg-gray-100 rounded-full"
-                        >
-                          <PencilIcon className="h-4 w-4 text-blue-600" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(a.id)}
-                          className="p-1 hover:bg-gray-100 rounded-full"
-                        >
-                          <TrashIcon className="h-4 w-4 text-red-600" />
-                        </button>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {validAnnouncements.length === 0 ? (
+                  <p className="text-center text-gray-500 text-sm py-4">No announcements yet</p>
+                ) : (
+                  validAnnouncements.map((a) => (
+                    <div key={a.id} className="border-b pb-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-sm font-medium">{a.title}</h3>
+                          <p className="text-xs text-gray-500">
+                            {new Date(a.created_at).toLocaleDateString()} • {a.target_audience}
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEdit(a)}
+                            className="p-1 hover:bg-gray-100 rounded-full"
+                          >
+                            <PencilIcon className="h-4 w-4 text-blue-600" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(a.id)}
+                            className="p-1 hover:bg-gray-100 rounded-full"
+                          >
+                            <TrashIcon className="h-4 w-4 text-red-600" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               {/* Stats */}
-              <div className="flex justify-between text-sm mt-6">
+              <div className="flex justify-between text-sm mt-6 border-t pt-4">
                 <div>
-                  <p className="font-semibold">12</p>
-                  <p className="text-gray-500">Active</p>
+                  <p className="font-semibold">{validAnnouncements.length}</p>
+                  <p className="text-gray-500">Total</p>
                 </div>
                 <div>
-                  <p className="font-semibold">8</p>
-                  <p className="text-gray-500">Archived</p>
+                  <p className="font-semibold">{validAnnouncements.filter(a => a.status === 'active').length}</p>
+                  <p className="text-gray-500">Active</p>
                 </div>
               </div>
             </div>

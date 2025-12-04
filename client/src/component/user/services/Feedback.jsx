@@ -1,147 +1,147 @@
-import React, { useState, useEffect } from "react";
-import axios from 'axios';
-import {
-  HomeIcon,
-  UserIcon,
-  ChatBubbleLeftIcon,
-  ClipboardDocumentListIcon,
-  MagnifyingGlassIcon,
-  WalletIcon,
-  ReceiptRefundIcon,
-  ChatBubbleOvalLeftIcon,
-  ArrowRightOnRectangleIcon,
-  BellIcon,
-  Bars3Icon,
-  XMarkIcon,
-  BookmarkIcon,
-} from "@heroicons/react/24/outline";
-import { StarIcon } from '@heroicons/react/24/solid';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { submitFeedback, submitReport, getUserFeedback } from '../../../services/api';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ExclamationTriangleIcon, XMarkIcon, StarIcon, ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { submitFeedback } from '../../../services/api';
 
-const violationTypes = {
-  minor: ['spam', 'rude_message', 'irrelevant_post'],
-  serious: ['harassment', 'scamming', 'fake_credentials', 'offensive_behavior'],
-  abuse: ['fake_account', 'coin_misuse', 'credit_abuse']
-};
+const API_URL = 'http://localhost:5000';
 
-const sendFeedbackNotification = async (feedbackData) => {
-  try {
-    await axios.post('/api/notifications', {
-      userId: feedbackData.tutorId,
-      type: 'feedback_received',
-      title: 'New Feedback Received',
-      content: `You received feedback from ${feedbackData.learnerName}:\n${feedbackData.comment}`,
-    });
-  } catch (error) {
-    console.error('Error sending feedback notification:', error);
-  }
-};
+// ✅ Report User Modal - SAME CONTENT AS PROVIDER PROFILE
+function ReportUserModal({ userId, userName, onClose }) {
+  const [reportReason, setReportReason] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
 
-function ReportUser({ booking, onClose }) {
-  const [violationType, setViolationType] = useState('minor');
-  const [reportReason, setReportReason] = useState('');
-  const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmitReport = async (e) => {
+  const handleReportSubmit = async (e) => {
     e.preventDefault();
-    if (!reportReason) {
-      alert('Please select a specific violation reason');
+    
+    if (!reportReason.trim() || !reportDescription.trim()) {
+      alert('Please fill in all fields');
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      const user = JSON.parse(localStorage.getItem('user'));
-      const reportData = {
-        reported_user_id: booking.provider_id,
-        reporter_id: user.id,
-        violationType: violationType,
+      setSubmittingReport(true);
+      const currentUser = JSON.parse(localStorage.getItem('user'));
+      
+      if (!currentUser?.id) {
+        alert('Please login first');
+        return;
+      }
+
+      const reportPayload = {
+        reported_user_id: parseInt(userId),
+        reporter_id: parseInt(currentUser.id),
         reason: reportReason,
-        description: description.trim()
+        description: reportDescription
       };
 
-      await submitReport(reportData);
-      alert('Report submitted successfully');
-      onClose();
+      console.log('📝 Submitting report with payload:', reportPayload);
+
+      const response = await fetch(`${API_URL}/api/reports/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reportPayload)
+      });
+
+      const data = await response.json();
+      console.log('📨 Response from server:', data);
+
+      if (response.ok) {
+        alert('✅ Report submitted successfully! Our team will review it shortly.');
+        onClose();
+        setReportReason('');
+        setReportDescription('');
+      } else {
+        alert('❌ ' + (data.message || 'Failed to submit report'));
+      }
     } catch (error) {
-      console.error('Error submitting report:', error);
+      console.error('❌ Error submitting report:', error);
       alert('Failed to submit report. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setSubmittingReport(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg sm:text-xl font-semibold mb-4">Report User</h2>
-        
-        <form onSubmit={handleSubmitReport}>
-          <div className="mb-4">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-              Violation Type
-            </label>
-            <select
-              value={violationType}
-              onChange={(e) => {
-                setViolationType(e.target.value);
-                setReportReason('');
-              }}
-              className="w-full p-2 border rounded-lg mb-3 text-sm"
-              required
-            >
-              <option value="minor">Minor Issue</option>
-              <option value="serious">Serious Issue</option>
-              <option value="abuse">Platform Abuse</option>
-            </select>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Report User</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
 
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-              Specific Reason
+        <form onSubmit={handleReportSubmit} className="space-y-4">
+          {/* Reason for Report */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Reason for Report
             </label>
             <select
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
-              className="w-full p-2 border rounded-lg text-sm"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-700"
               required
             >
-              <option value="">Select a specific reason</option>
-              {violationTypes[violationType].map(reason => (
-                <option key={reason} value={reason}>
-                  {reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                </option>
-              ))}
+              <option value="">Select a reason</option>
+              <option value="Inappropriate Behavior">Inappropriate Behavior</option>
+              <option value="Scam/Fraud">Scam/Fraud</option>
+              <option value="Poor Service Quality">Poor Service Quality</option>
+              <option value="Harassment">Harassment</option>
+              <option value="Fake Account">Fake Account</option>
+              <option value="Offensive Content">Offensive Content</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-              Additional Details
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Description
             </label>
             <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2 border rounded-lg text-sm"
+              value={reportDescription}
+              onChange={(e) => setReportDescription(e.target.value)}
+              placeholder="Please provide details about your report..."
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-700 placeholder-gray-400"
               rows="4"
-              placeholder="Please provide more details..."
+              maxLength="500"
+              required
             />
+            <p className="text-xs text-gray-500 mt-1">{reportDescription.length}/500 characters</p>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+          {/* Information Box */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-xs text-blue-700 leading-relaxed">
+              <strong>Note:</strong> False reports may result in your account being suspended. Please ensure all information is accurate.
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm border rounded-lg"
+              onClick={() => {
+                onClose();
+                setReportReason('');
+                setReportDescription('');
+              }}
+              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm"
+              disabled={submittingReport || !reportReason.trim() || !reportDescription.trim()}
+              className="flex-1 px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Report'}
+              {submittingReport ? 'Submitting...' : 'Submit Report'}
             </button>
           </div>
         </form>
@@ -151,332 +151,262 @@ function ReportUser({ booking, onClose }) {
 }
 
 export default function Feedback() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { booking } = location.state || {};
+  const navigate = useNavigate();
+  const booking = location.state?.booking;
   
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
   const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userData, setUserData] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingUserId, setReportingUserId] = useState(null);
+  const [reportingUserName, setReportingUserName] = useState(null);
 
-  const navItems = [
-    { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
-    { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
-    { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-    { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
-    { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
-    { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
-    { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
-    { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
-    { name: "Past Feedbacks", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
-    { name: "Log Out", icon: <ArrowRightOnRectangleIcon className="h-5 w-5" />, path: "/" },
-  ];
+  if (!booking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">No Booking Found</h1>
+          <p className="text-gray-600 mb-6">Please complete a transaction first before leaving feedback.</p>
+          <button
+            onClick={() => navigate('/transactions')}
+            className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 font-semibold transition-all"
+          >
+            Back to Transactions
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUserData(storedUser);
-    fetchFeedback(storedUser?.id);
-  }, []);
+  const handleReportUser = () => {
+    const reportedUserId = booking.provider_id || booking.user_id;
+    const reportedUserName = booking.provider_name || booking.user_name || 'Provider';
+    
+    setReportingUserId(reportedUserId);
+    setReportingUserName(reportedUserName);
+    setShowReportModal(true);
+  };
 
-  useEffect(() => {
-    if (!booking) {
-      navigate('/transactions');
-    }
-  }, [booking, navigate]);
+  const handleSubmitFeedback = async (e) => {
+    e.preventDefault();
 
-  const handleSubmitFeedback = async () => {
     if (rating === 0) {
       alert('Please select a rating');
       return;
     }
 
-    setIsSubmitting(true);
+    if (comment.trim() === '') {
+      alert('Please write a comment');
+      return;
+    }
+
     try {
-      const user = JSON.parse(localStorage.getItem('user'));
-      
+      setSubmitting(true);
+      const currentUser = JSON.parse(localStorage.getItem('user'));
+
       const feedbackData = {
-        service_id: booking.service_id,
-        user_id: user.id,
-        rating: rating,
+        service_id: parseInt(booking.service_id),
+        user_id: parseInt(currentUser.id),
+        rating: parseInt(rating),
         comment: comment.trim()
       };
 
+      console.log('📝 Submitting feedback:', feedbackData);
+
       await submitFeedback(feedbackData);
 
-      await sendFeedbackNotification({
-        tutorId: booking.provider_id,
-        learnerName: user.full_name,
-        comment: comment.trim() || `Rated ${rating} stars`
-      });
+      console.log('✅ Feedback submitted successfully');
+      setSubmitted(true);
 
-      alert('Feedback submitted successfully!');
-      navigate('/view-past-feedback');
+      // Redirect after 2 seconds
+      setTimeout(() => {
+        navigate('/transactions');
+      }, 2000);
     } catch (error) {
-      console.error('Error submitting feedback:', error);
+      console.error('❌ Error submitting feedback:', error);
       alert('Failed to submit feedback. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  const fetchFeedback = async (userId) => {
-    if (!userId || !booking?.service_id) return;
-    
-    try {
-      const response = await getUserFeedback(userId);
-      
-      const currentFeedback = response.data.filter(f => 
-        f.service_id === booking.service_id && 
-        f.user_id === userId
-      );
-
-      if (currentFeedback.length > 0) {
-        setRating(currentFeedback[0].rating);
-        setComment(currentFeedback[0].comment || '');
-      }
-    } catch (error) {
-      console.error('Error fetching feedback:', error);
-    }
-  };
-
-  const handleSkip = () => {
-    navigate('/transactions');
-  };
-
-  if (!booking) {
-    return null;
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center animate-fade-in">
+          <div className="mb-4 flex justify-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h1>
+          <p className="text-gray-600 mb-6">Your feedback has been submitted successfully. We appreciate your time and feedback.</p>
+          <p className="text-sm text-gray-500">Redirecting to transactions...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-gradient-to-b from-blue-50 to-white h-screen flex flex-col lg:flex-row w-full overflow-hidden">
-      {/* Sidebar - Desktop */}
-      <div className="hidden lg:flex fixed inset-y-0 left-0 bg-gradient-to-b from-gray-50 to-white w-64 flex-col shadow-xl border-r z-30">
-        <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600">
-          <h2 className="font-semibold text-white text-lg">Menu</h2>
-        </div>
-
-        <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.name}
-              onClick={() => navigate(item.path)}
-              className="flex items-center w-full p-3 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-200 group hover:bg-gradient-to-r from-blue-50 to-indigo-50"
-            >
-              <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform duration-200">
-                {item.icon}
-              </div>
-              <span className="ml-3 font-medium text-sm">{item.name}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Sidebar - Mobile */}
-      <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} bg-gradient-to-b from-gray-50 to-white w-64 transition-transform duration-300 ease-in-out z-40 lg:hidden flex flex-col shadow-xl border-r`}>
-        <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex justify-between items-center">
-          <h2 className="font-semibold text-white">Menu</h2>
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header with Back Button */}
+        <div className="mb-8 flex items-center">
+          <button
+            onClick={() => navigate('/transactions')}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium transition-colors"
           >
-            <XMarkIcon className="h-6 w-6" />
+            <ArrowLeftIcon className="h-5 w-5" />
+            Back to Transactions
           </button>
         </div>
 
-        <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.name}
-              onClick={() => {
-                navigate(item.path);
-                setIsSidebarOpen(false);
-              }}
-              className="flex items-center w-full p-3 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-200 group hover:bg-gradient-to-r from-blue-50 to-indigo-50"
-            >
-              <div className="bg-white p-2 rounded-lg shadow-sm group-hover:scale-110 transition-transform duration-200">
-                {item.icon}
-              </div>
-              <span className="ml-3 font-medium text-sm">{item.name}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        ></div>
-      )}
-
-      {/* Main Content - Maximized */}
-      <div className="flex-1 lg:ml-64 flex flex-col h-screen overflow-hidden">
-        {/* Header - Fixed */}
-        <div className="p-4 sm:p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg flex-shrink-0">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <button 
-                onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors"
-              >
-                <Bars3Icon className="h-6 w-6" />
-              </button>
-              <h1 className="text-lg sm:text-xl font-semibold truncate">Rate & Review</h1>
-            </div>
-            <button 
-              onClick={() => navigate('/notification')} 
-              className="flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors relative"
-            >
-              <BellIcon className="h-6 w-6" />
-              <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
-            </button>
+        {/* Main Card */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Header Section */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white">
+            <h1 className="text-3xl font-bold mb-2">Rate & Review</h1>
+            <p className="text-blue-100">Share your experience with this service</p>
           </div>
-        </div>
 
-        {/* Content - Scrollable and Maximized */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto w-full px-4 lg:px-8 py-6 lg:py-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-              {/* Left Column */}
-              <div className="space-y-6">
-                {/* Service Info Card */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src="https://via.placeholder.com/60"
-                      alt="profile"
-                      className="w-16 h-16 rounded-full object-cover flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h2 className="font-semibold text-lg truncate">{booking.provider_name}</h2>
-                      <p className="text-sm text-gray-500 truncate">{booking.service_title}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Completed on {new Date(booking.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rating Card */}
-                <div className="bg-white rounded-2xl shadow-sm p-8">
-                  <div className="text-center">
-                    <p className="text-gray-700 font-medium text-lg mb-6">How was your experience?</p>
-                    <div className="flex justify-center gap-4 mb-4">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          onClick={() => setRating(star)}
-                          onMouseEnter={() => setHoveredRating(star)}
-                          onMouseLeave={() => setHoveredRating(0)}
-                          className="transition-transform hover:scale-110"
-                        >
-                          <StarIcon
-                            className={`h-12 w-12 ${
-                              star <= (hoveredRating || rating)
-                                ? "text-yellow-400"
-                                : "text-gray-300"
-                            }`}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                    {rating > 0 && (
-                      <p className="text-gray-500 text-base font-medium">{rating} out of 5 stars</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Helpful Tips */}
-                <div className="border border-blue-100 rounded-xl p-6 bg-blue-50">
-                  <h3 className="font-medium text-base mb-3 text-blue-900">💡 Helpful Tips</h3>
-                  <p className="text-sm text-blue-700 leading-relaxed">
-                    Your feedback helps improve our community. Be honest and constructive
-                    in your review to help others make informed decisions.
-                  </p>
-                </div>
+          {/* Content Section */}
+          <div className="p-8">
+            {/* Service Info */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-8 border border-blue-100">
+              <h2 className="font-semibold text-gray-900 mb-2">{booking.service_title}</h2>
+              <p className="text-sm text-gray-600 mb-3">{booking.description}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-blue-600">Provider: {booking.provider_name}</span>
+                <span className="text-sm font-semibold text-blue-600">SC {Number(booking.price).toFixed(2)}</span>
               </div>
+            </div>
 
-              {/* Right Column */}
-              <div className="space-y-6">
-                {/* Comment Box */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
-                  <label className="block text-base font-medium text-gray-700 mb-3">
-                    Share your experience
-                  </label>
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Tell us about your experience with this service..."
-                    className="w-full border border-gray-200 rounded-xl p-4 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    rows="8"
-                    maxLength={1500}
-                  ></textarea>
-                  <p className="text-right text-xs text-gray-400 mt-2">
-                    {comment.length}/1500 characters
-                  </p>
-                </div>
-
-                {/* Report Button */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm text-gray-600">Had an issue with this service?</p>
-                    <button 
-                      className="bg-red-500 text-white px-6 py-2.5 text-sm rounded-lg hover:bg-red-600 transition-colors whitespace-nowrap"
-                      onClick={() => setShowReportModal(true)}
+            {/* Feedback Form */}
+            <form onSubmit={handleSubmitFeedback} className="space-y-8">
+              {/* Rating Section */}
+              <div>
+                <label className="block text-lg font-semibold text-gray-900 mb-4">
+                  How was your experience?
+                </label>
+                <div className="flex justify-center gap-4">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      className="transition-transform duration-200 hover:scale-110 focus:outline-none"
                     >
-                      Report User
+                      <StarIcon
+                        className={`h-12 w-12 ${
+                          star <= (hoverRating || rating)
+                            ? 'fill-yellow-400 text-yellow-400'
+                            : 'text-gray-300'
+                        } transition-colors duration-200`}
+                      />
                     </button>
-                  </div>
+                  ))}
                 </div>
+                <p className="text-center mt-4 text-lg font-semibold text-gray-900">
+                  {rating > 0 ? `${rating} out of 5 stars` : 'Select a rating'}
+                </p>
+              </div>
 
-                {/* Submit Buttons */}
-                <div className="space-y-3">
-                  <button 
-                    onClick={handleSubmitFeedback}
-                    disabled={isSubmitting || rating === 0}
-                    className={`w-full ${
-                      isSubmitting || rating === 0
-                        ? 'bg-gray-300'
-                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
-                    } text-white py-4 rounded-xl font-medium text-base transition-all shadow-md`}
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
-                  </button>
-                  <button 
-                    onClick={() => navigate('/view-past-feedback')}
-                    disabled={isSubmitting}
-                    className="w-full border-2 border-blue-600 text-blue-600 py-4 rounded-xl font-medium text-base hover:bg-blue-50 transition-all disabled:opacity-50"
-                  >
-                    View Past Feedback
-                  </button>
-                  <button 
-                    onClick={() => navigate('/transactions')}
-                    disabled={isSubmitting}
-                    className="w-full border-2 border-gray-300 text-gray-600 py-4 rounded-xl font-medium text-base hover:bg-gray-50 transition-all disabled:opacity-50"
-                  >
-                    Skip for Now
-                  </button>
+              {/* Comment Section */}
+              <div>
+                <label className="block text-lg font-semibold text-gray-900 mb-3">
+                  Share your experience
+                </label>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Tell us what you think about this service..."
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-none font-sans"
+                  rows="5"
+                  maxLength="500"
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-xs text-gray-500">
+                    {comment.length}/500 characters
+                  </p>
+                  {comment.length > 450 && (
+                    <p className="text-xs text-orange-500">Warning: Character limit approaching</p>
+                  )}
                 </div>
               </div>
-            </div>
+
+              {/* Information Box */}
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-700 leading-relaxed">
+                  <strong>💡 Tip:</strong> Your feedback helps other users make informed decisions and helps providers improve their services. Be honest and constructive in your review.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3">
+                <button
+                  type="submit"
+                  disabled={submitting || rating === 0 || comment.trim() === ''}
+                  className={`w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all ${
+                    submitting || rating === 0 || comment.trim() === ''
+                      ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl'
+                  }`}
+                >
+                  {submitting ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Submit Feedback
+                    </>
+                  )}
+                </button>
+
+                {/* ✅ Report User Button */}
+                <button
+                  type="button"
+                  onClick={handleReportUser}
+                  className="w-full px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold flex items-center justify-center gap-2 transition-colors"
+                >
+                  <ExclamationTriangleIcon className="h-5 w-5" />
+                  Report User
+                </button>
+              </div>
+            </form>
           </div>
+        </div>
+
+        {/* Footer Help Text */}
+        <div className="mt-6 text-center text-sm text-gray-600">
+          <p>Your feedback is valuable and helps maintain the quality of our community.</p>
         </div>
       </div>
 
-      {/* Report Modal */}
+      {/* ✅ Report User Modal */}
       {showReportModal && (
-        <ReportUser 
-          booking={booking}
-          onClose={() => setShowReportModal(false)} 
+        <ReportUserModal
+          userId={reportingUserId}
+          userName={reportingUserName}
+          onClose={() => {
+            setShowReportModal(false);
+            setReportingUserId(null);
+            setReportingUserName(null);
+          }}
         />
       )}
     </div>

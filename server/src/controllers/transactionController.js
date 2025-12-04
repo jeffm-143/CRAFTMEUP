@@ -5,11 +5,23 @@ exports.createTransaction = async (req, res) => {
         const { userId, serviceId, type, amount, referenceNumber } = req.body;
         const paymentProof = req.file ? '/uploads/' + req.file.filename : null;
 
+        console.log('📝 Creating transaction:', { userId, serviceId, amount });
+
+        // ✅ Validate required fields
+        if (!userId || !serviceId || !amount) {
+            return res.status(400).json({ 
+                message: 'Missing required fields: userId, serviceId, amount' 
+            });
+        }
+
+        // ✅ Use the amount provided (which should be the service price at booking time)
+        const transactionAmount = parseFloat(amount);
+
         const [result] = await pool.execute(
             `INSERT INTO transactions 
             (user_id, service_id, type, amount, reference_number, payment_proof, status) 
             VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
-            [userId, serviceId, type, amount, referenceNumber, paymentProof]
+            [userId, serviceId, type || 'booking', transactionAmount, referenceNumber, paymentProof]
         );
 
         const [transaction] = await pool.execute(
@@ -20,13 +32,19 @@ exports.createTransaction = async (req, res) => {
             [result.insertId]
         );
 
+        console.log('✅ Transaction created:', result.insertId);
+
         res.status(201).json({
             message: 'Transaction created successfully',
+            data: {
+                id: result.insertId,
+                ...transaction[0]
+            },
             transaction: transaction[0]
         });
     } catch (error) {
         console.error('Error creating transaction:', error);
-        res.status(500).json({ message: 'Failed to create transaction' });
+        res.status(500).json({ message: 'Failed to create transaction', error: error.message });
     }
 };
 

@@ -51,7 +51,7 @@ const ProviderProfile = () => {
   const handleReportSubmit = async (e) => {
     e.preventDefault();
     
-    if (!reportReason || !reportDescription) {
+    if (!reportReason.trim() || !reportDescription.trim()) {
       alert('Please fill in all fields');
       return;
     }
@@ -60,29 +60,42 @@ const ProviderProfile = () => {
       setSubmittingReport(true);
       const currentUser = JSON.parse(localStorage.getItem('user'));
       
+      if (!currentUser?.id) {
+        alert('Please login first');
+        return;
+      }
+
+      console.log('Submitting report with:', {
+        reported_user_id: userId,
+        reporter_id: currentUser.id,
+        reason: reportReason,
+        description: reportDescription
+      });
+
       const response = await fetch(`${API_URL}/api/reports/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reported_user_id: userId,
-          reporter_id: currentUser?.id,
+          reported_user_id: parseInt(userId),
+          reporter_id: parseInt(currentUser.id),
           reason: reportReason,
-          description: reportDescription,
-          violation_type: 'minor'
+          description: reportDescription
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        alert('Report submitted successfully');
+        alert('Report submitted successfully! Our team will review it shortly.');
         setShowReportModal(false);
         setReportReason('');
         setReportDescription('');
       } else {
-        alert('Failed to submit report');
+        alert(data.message || 'Failed to submit report');
       }
     } catch (error) {
       console.error('Error submitting report:', error);
-      alert('Failed to submit report');
+      alert('Failed to submit report. Please try again.');
     } finally {
       setSubmittingReport(false);
     }
@@ -259,7 +272,7 @@ const ProviderProfile = () => {
         {/* Report User Button */}
         <button
           onClick={() => setShowReportModal(true)}
-          className="w-full px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold flex items-center justify-center gap-2"
+          className="w-full px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold flex items-center justify-center gap-2 transition-colors"
         >
           <ExclamationTriangleIcon className="h-5 w-5" />
           Report User
@@ -269,12 +282,12 @@ const ProviderProfile = () => {
       {/* Report Modal */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold text-gray-900">Report User</h2>
               <button
                 onClick={() => setShowReportModal(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-100 rounded-lg"
               >
                 <XMarkIcon className="h-6 w-6" />
               </button>
@@ -289,11 +302,12 @@ const ProviderProfile = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
                   <option value="">Select a reason</option>
-                  <option value="inappropriate-behavior">Inappropriate Behavior</option>
-                  <option value="scam">Scam/Fraud</option>
-                  <option value="poor-service">Poor Service Quality</option>
-                  <option value="harassment">Harassment</option>
-                  <option value="other">Other</option>
+                  <option value="Inappropriate Behavior">Inappropriate Behavior</option>
+                  <option value="Scam/Fraud">Scam/Fraud</option>
+                  <option value="Poor Service Quality">Poor Service Quality</option>
+                  <option value="Harassment">Harassment</option>
+                  <option value="Fake Account">Fake Account</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
 
@@ -305,21 +319,29 @@ const ProviderProfile = () => {
                   placeholder="Please provide details about your report..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
                   rows="4"
+                  maxLength="500"
                 ></textarea>
+                <p className="text-xs text-gray-500 mt-1">{reportDescription.length}/500 characters</p>
               </div>
 
-              <div className="flex gap-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-700">
+                  <strong>Note:</strong> False reports may result in your account being suspended. Please ensure all information is accurate.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowReportModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submittingReport}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50"
+                  disabled={submittingReport || !reportReason || !reportDescription}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {submittingReport ? 'Submitting...' : 'Submit Report'}
                 </button>

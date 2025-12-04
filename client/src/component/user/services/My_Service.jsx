@@ -182,12 +182,22 @@ export default function MyServices() {
 const fetchUserServices = async () => {
   try {
     const user = JSON.parse(localStorage.getItem("user"));
-    const response = await getUserServices(user.id);
+    const data = await getUserServices(user.id);
     
-    console.log('Raw response:', response);
+    console.log('Raw response:', data);
+    
+    // Handle different response formats
+    let servicesArray = [];
+    if (Array.isArray(data)) {
+      servicesArray = data;
+    } else if (data?.data && Array.isArray(data.data)) {
+      servicesArray = data.data;
+    } else if (data?.services && Array.isArray(data.services)) {
+      servicesArray = data.services;
+    }
     
     // Add average rating and total ratings to each service
-    const servicesWithRatings = response.data.map(service => {
+    const servicesWithRatings = servicesArray.map(service => {
       console.log('Service data before mapping:', {
         id: service.id,
         title: service.title,

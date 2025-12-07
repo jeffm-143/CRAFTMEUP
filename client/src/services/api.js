@@ -286,11 +286,11 @@ export const getUserData = async (userId) => {
   }
 };
 
-export const createWalletRequest = async (formData) => {
+export const createWalletRequest = async (requestData) => {
   try {
-    const response = await api.post('/transactions/wallet/request', formData, {
+    const response = await api.post('/transactions/wallet/request', requestData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
     });

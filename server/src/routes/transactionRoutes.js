@@ -185,11 +185,15 @@ router.get('/monthly/:userId', async (req, res) => {
 
 router.post('/wallet/request', upload.single('proofImage'), async (req, res) => {
   try {
-    const { userId, type, amount, referenceNumber } = req.body;
-    const proofImage = req.file ? req.file.filename : null;
+    const { userId, type, amount, referenceNumber, proofImage } = req.body;
 
     if (!userId || !type || !amount || !referenceNumber) {
       return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // For top-up, validate proof image
+    if (type === 'top-up' && !proofImage) {
+      return res.status(400).json({ message: 'Proof image is required for top-up' });
     }
 
     let [wallet] = await db.query('SELECT * FROM wallet WHERE user_id = ?', [userId]);
@@ -206,9 +210,10 @@ router.post('/wallet/request', upload.single('proofImage'), async (req, res) => 
       return res.status(400).json({ message: 'Insufficient balance' });
     }
 
+    // ✅ STORE BASE64 STRING DIRECTLY
     const [result] = await db.query(
       'INSERT INTO wallet_requests (user_id, type, amount, reference_number, proof_image, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, type, amount, referenceNumber, proofImage, 'pending']
+      [userId, type, amount, referenceNumber, proofImage || null, 'pending']
     );
 
     res.json({ 
@@ -252,8 +257,7 @@ router.get('/wallet/requests', async (req, res) => {
       SELECT 
         wr.*,
         u.full_name,
-        u.email,
-        CONCAT('http://localhost:5000/uploads/', wr.proof_image) as proof_image_url
+        u.email
       FROM wallet_requests wr
       LEFT JOIN users u ON wr.user_id = u.id
       ORDER BY 
@@ -271,53 +275,88 @@ router.get('/wallet/requests', async (req, res) => {
 });
 
 router.put('/wallet/requests/:id/status', async (req, res) => {
-  const connection = await db.getConnection();
   try {
-    await connection.beginTransaction();
-    
-    const { id } = req.params;
+    const requestId = parseInt(req.params.id, 10);
     const { status, userId, amount, type } = req.body;
     
-    await connection.query(
+    console.log('🔄 Updating wallet request:', { requestId, status, userId, amount, type });
+    
+    if (!requestId || isNaN(requestId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid request ID is required'
+      });
+    }
+    
+    // Update wallet request status
+    const [updateResult] = await db.execute(
       'UPDATE wallet_requests SET status = ? WHERE id = ?',
-      [status, id]
+      [status, requestId]
     );
 
-    if (type !== 'none') {
-      const [wallet] = await connection.query(
+    console.log('Update result:', updateResult);
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Request not found'
+      });
+    }
+
+    // Handle wallet balance updates
+    if (type && type !== 'none' && userId && amount) {
+      const [wallet] = await db.execute(
         'SELECT balance FROM wallet WHERE user_id = ?',
         [userId]
       );
 
       if (wallet.length === 0) {
-        throw new Error('Wallet not found');
+        // Create wallet if missing
+        await db.execute(
+          'INSERT INTO wallet (user_id, balance) VALUES (?, ?)',
+          [userId, 50.00]
+        );
+        
+        const newBalance = type === 'credit' 
+          ? 50.00 + parseFloat(amount) 
+          : Math.max(0, 50.00 - parseFloat(amount));
+        
+        await db.execute(
+          'UPDATE wallet SET balance = ? WHERE user_id = ?',
+          [newBalance, userId]
+        );
+      } else {
+        const currentBalance = parseFloat(wallet[0].balance);
+        const updateAmount = type === 'credit' ? parseFloat(amount) : -parseFloat(amount);
+        const newBalance = currentBalance + updateAmount;
+
+        if (type === 'debit' && newBalance < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Insufficient balance for cash-out'
+          });
+        }
+
+        await db.execute(
+          'UPDATE wallet SET balance = ? WHERE user_id = ?',
+          [newBalance, userId]
+        );
       }
 
-      const currentBalance = parseFloat(wallet[0].balance);
-      const updateAmount = type === 'credit' ? amount : -amount;
-      const newBalance = currentBalance + updateAmount;
-
-      if (type === 'debit' && newBalance < 0) {
-        throw new Error('Insufficient balance');
-      }
-
-      await connection.query(
-        'UPDATE wallet SET balance = ? WHERE user_id = ?',
-        [newBalance, userId]
-      );
+      console.log(`✅ Wallet updated: ${type} ${amount} SC for user ${userId}`);
     }
 
-    await connection.commit();
-    res.json({ success: true });
+    res.json({ 
+      success: true,
+      message: 'Request status updated successfully'
+    });
 
   } catch (error) {
-    await connection.rollback();
     console.error('Error updating wallet request:', error);
     res.status(500).json({ 
+      success: false,
       message: error.message || 'Failed to update request status'
     });
-  } finally {
-    connection.release();
   }
 });
 

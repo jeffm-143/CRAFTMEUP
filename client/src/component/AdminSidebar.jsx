@@ -25,8 +25,7 @@ export default function AdminSidebar() {
   return (
     <div className="w-72 bg-white shadow-xl z-20">
       <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600">
-        <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
-        <p className="text-blue-100 text-sm mt-1">System Management</p>
+        <h1 className="text-xl font-bold text-white">Admin Management</h1>
       </div>
 
       <nav className="p-4 space-y-2">

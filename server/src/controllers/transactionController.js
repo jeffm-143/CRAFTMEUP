@@ -89,7 +89,6 @@ exports.updateTransactionStatus = async (req, res) => {
     }
 };
 
-// Add a function to get all transactions for a user
 exports.getAllUserTransactions = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -109,7 +108,6 @@ exports.getAllUserTransactions = async (req, res) => {
     }
 };
 
-// Add a function to delete a transaction
 exports.deleteTransaction = async (req, res) => {
     try {
         const { id } = req.params;
@@ -127,5 +125,119 @@ exports.deleteTransaction = async (req, res) => {
     } catch (error) {
         console.error('Error deleting transaction:', error);
         res.status(500).json({ message: 'Failed to delete transaction' });
+    }
+};
+
+exports.createWalletRequest = async (req, res) => {
+    try {
+        const { userId, type, amount, referenceNumber, proofImage } = req.body;
+
+        if (!userId || !type || !amount || !referenceNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+
+        if (type === 'top-up' && !proofImage) {
+            return res.status(400).json({
+                success: false,
+                message: 'Proof image is required for top-up'
+            });
+        }
+
+        const [result] = await pool.execute(
+            `INSERT INTO wallet_requests 
+             (user_id, type, amount, reference_number, proof_image, status) 
+             VALUES (?, ?, ?, ?, ?, 'pending')`,
+            [
+                userId,
+                type,
+                parseFloat(amount),
+                referenceNumber,
+                proofImage || null
+            ]
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Wallet request created successfully',
+            requestId: result.insertId
+        });
+
+    } catch (error) {
+        console.error('Error creating wallet request:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create wallet request',
+            error: error.message
+        });
+    }
+};
+
+exports.getWalletRequests = async (req, res) => {
+    try {
+        const [requests] = await pool.execute(
+            `SELECT wr.*, u.full_name, u.email
+             FROM wallet_requests wr
+             JOIN users u ON wr.user_id = u.id
+             ORDER BY wr.created_at DESC`
+        );
+
+        res.json({
+            success: true,
+            data: requests
+        });
+    } catch (error) {
+        console.error('Error fetching wallet requests:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch wallet requests'
+        });
+    }
+};
+
+exports.updateWalletRequestStatus = async (req, res) => {
+    try {
+        const requestId = parseInt(req.params.requestId || req.params.id, 10);
+        const { status, userId, amount, type } = req.body;
+
+        if (!requestId || isNaN(requestId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid request ID is required'
+            });
+        }
+
+        const validStatuses = ['pending', 'approved', 'rejected', 'completed'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid status'
+            });
+        }
+
+        const [result] = await pool.execute(
+            `UPDATE wallet_requests SET status = ? WHERE id = ?`,
+            [status, requestId]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Request not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Request status updated successfully'
+        });
+    } catch (error) {
+        console.error('Error updating wallet request:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update wallet request'
+        });
     }
 };

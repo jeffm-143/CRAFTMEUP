@@ -142,7 +142,7 @@ CREATE TABLE `wallet_requests` (
   `type` enum('top-up','cash-out') NOT NULL,
   `amount` decimal(10,2) NOT NULL,
   `reference_number` varchar(100) NOT NULL,
-  `proof_image` varchar(255) DEFAULT NULL,
+  `proof_image` LONGTEXT DEFAULT NULL,
   `status` enum('pending','approved','rejected','completed') DEFAULT 'pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()

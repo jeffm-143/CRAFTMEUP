@@ -128,6 +128,8 @@ const initializeSocket = (server) => {
       }
     });
 
+
+
     socket.on('user-offline', (userId) => {
       if (activeUsers[userId]) {
         delete activeUsers[userId];
@@ -157,4 +159,34 @@ const getIO = () => {
   return io;
 };
 
-module.exports = { initializeSocket, getIO };
+// Helper functions to emit admin events
+const emitActivityCreated = (activity) => {
+  if (io) {
+    io.to('admin-room').emit('activity-created', activity);
+  }
+};
+
+const emitActivityStatusUpdated = (activityId, status, type) => {
+  if (io) {
+    io.to('admin-room').emit('activity-status-updated', {
+      activityId,
+      status,
+      type,
+      timestamp: new Date()
+    });
+  }
+};
+
+const emitStatsUpdated = (stats) => {
+  if (io) {
+    io.to('admin-room').emit('stats-updated', stats);
+  }
+};
+
+module.exports = { 
+  initializeSocket, 
+  getIO,
+  emitActivityCreated,
+  emitActivityStatusUpdated,
+  emitStatsUpdated
+};

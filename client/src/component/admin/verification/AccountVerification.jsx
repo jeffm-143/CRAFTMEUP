@@ -80,15 +80,21 @@ export default function AccountVerification() {
         {/* Header */}
         <div className="bg-white border-b shadow-sm">
           <div className="flex items-center justify-between px-8 py-6">
-            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-              Account Verification
-            </h2>
+            <div>
+              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
+                Account Verification
+              </h2>
+              <p className="text-sm text-gray-500 mt-2">
+                Manage and approve pending user accounts
+              </p>
+            </div>
             <div className="text-sm text-gray-600 flex items-center space-x-2">
               <span>Pending:</span>
               <span className="font-semibold text-blue-600 text-lg">{users.length}</span>
             </div>
           </div>
         </div>
+
 
         <div className="flex-1 p-8 overflow-y-auto">
           {loading ? (

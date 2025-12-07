@@ -144,16 +144,21 @@ const navItems = (() => {
   }
 };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.size <= 5 * 1024 * 1024) { // 5MB limit
-      setProofFile(file);
-    } else {
-      alert('File size should be less than 5MB');
-    }
-  };
+const handleFileChange = (e) => {
+  const file = e.target.files[0];
+  if (file && file.size <= 5 * 1024 * 1024) {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProofFile({
+        name: file.name,
+        data: reader.result // base64 string
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+};
 
-  const handleSubmitRequest = async () => {
+const handleSubmitRequest = async () => {
   if (!amount || !referenceNumber || (requestType === 'top-up' && !proofFile)) {
     alert('Please fill in all required fields');
     return;
@@ -169,22 +174,18 @@ const navItems = (() => {
       throw new Error('User data not found');
     }
 
-    const formData = new FormData();
-    formData.append('userId', user.id);
-    formData.append('type', requestType);
-    formData.append('amount', amount);
-    formData.append('referenceNumber', referenceNumber);
-    
-    if (proofFile) {
-      formData.append('proofImage', proofFile);
-    }
+    // Send as JSON instead of FormData
+    const requestData = {
+      userId: user.id,
+      type: requestType,
+      amount: parseFloat(amount),
+      referenceNumber: referenceNumber,
+      proofImage: proofFile?.data || null // base64 string
+    };
 
-    // Log FormData for debugging
-    for (let pair of formData.entries()) {
-      console.log('FormData entry:', pair[0], pair[1]);
-    }
+    console.log('Submitting request:', { ...requestData, proofImage: '...' });
 
-    const response = await createWalletRequest(formData);
+    const response = await createWalletRequest(requestData);
     console.log('Submit response:', response);
 
     if (response?.data?.success) {

@@ -6,6 +6,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   XMarkIcon,
+  CheckCircleIcon,
+  ExclamationIcon,
+  ShieldExclamationIcon,
 } from "@heroicons/react/24/outline";
 import AdminSidebar from "../../AdminSidebar";
 import { getAllReports, updateReportStatus, getUserReportHistory, notifyUser } from "../../../services/api";
@@ -15,148 +18,201 @@ const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, 
   
   if (!selectedReport) return null;
 
-  // ✅ FIX: Check if resolved - include all resolved statuses
   const isResolved = selectedReport.status && selectedReport.status !== 'pending' && selectedReport.status !== null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Report Details</h3>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slideUp flex flex-col">
+        {/* Header with gradient */}
+        <div className="bg-gradient-to-r from-red-600 to-red-700 px-8 py-6 text-white flex items-start justify-between">
+          <div>
+            <h3 className="text-2xl font-bold">Report Details</h3>
+            <p className="text-red-100 text-sm mt-1">Review and take action</p>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
           >
-            <XMarkIcon className="w-5 h-5" />
+            <XMarkIcon className="w-6 h-6" />
           </button>
         </div>
-        
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <h4 className="font-medium text-gray-700">Reporter</h4>
-            <p>{selectedReport.reporter_name}</p>
-            <p className="text-sm text-gray-500">ID: {selectedReport.reporter_id}</p>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-700">Reported User</h4>
-            <p>{selectedReport.reported_user_name}</p>
-            <p className="text-sm text-gray-500">ID: {selectedReport.reported_user_id}</p>
-          </div>
-        </div>
 
-        <div className="mb-6">
-          <h4 className="font-medium text-gray-700">Report Reason</h4>
-          <p>{selectedReport.reason}</p>
-          <h4 className="font-medium text-gray-700 mt-4">Report Description</h4>
-          {selectedReport.description && (
-            <p className="text-sm text-gray-600">{selectedReport.description}</p>
-          )}
-        </div>
-
-        {/* ✅ FIX: Show violation type selector ONLY if not resolved */}
-        {!isResolved && (
-          <div className="mb-6">
-            <h4 className="font-medium text-gray-700 mb-3">Select Violation Type</h4>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {Object.keys(violationTypes).map(type => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedViolationType(type)}
-                  className={`p-3 rounded-lg border-2 transition-all capitalize font-medium text-sm ${
-                    selectedViolationType === type
-                      ? 'border-blue-500 bg-blue-50 text-blue-600'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
+        {/* Content */}
+        <div className="overflow-y-auto flex-1 p-8 space-y-6">
+          {/* Reporter & Reported User */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border border-blue-200">
+              <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
+                <div className="w-1 h-5 bg-blue-600 rounded"></div>
+                Reporter
+              </h4>
+              <p className="font-semibold text-gray-900">{selectedReport.reporter_name}</p>
+              <p className="text-sm text-gray-600 mt-1">ID: {selectedReport.reporter_id}</p>
             </div>
 
-            {/* Subcategories Display */}
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h5 className="text-sm font-medium text-gray-700 mb-2">Subcategories:</h5>
-              <div className="flex flex-wrap gap-2">
-                {violationTypes[selectedViolationType]?.map(subType => (
-                  <span key={subType} className="px-3 py-1 bg-white border border-gray-200 rounded-full text-xs">
-                    {subType.replace('_', ' ')}
-                  </span>
-                ))}
+            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-5 border border-red-200">
+              <h4 className="font-bold text-red-900 mb-3 flex items-center gap-2">
+                <div className="w-1 h-5 bg-red-600 rounded"></div>
+                Reported User
+              </h4>
+              <p className="font-semibold text-gray-900">{selectedReport.reported_user_name}</p>
+              <p className="text-sm text-gray-600 mt-1">ID: {selectedReport.reported_user_id}</p>
+            </div>
+          </div>
+
+          {/* Report Details */}
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+              <h4 className="font-bold text-gray-900 mb-2">Report Reason</h4>
+              <p className="text-gray-700 font-medium">{selectedReport.reason}</p>
+            </div>
+
+            {selectedReport.description && (
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <h4 className="font-bold text-gray-900 mb-2">Description</h4>
+                <p className="text-gray-700 text-sm leading-relaxed">{selectedReport.description}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Violation Type Selector */}
+          {!isResolved && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <ShieldExclamationIcon className="w-5 h-5 text-orange-600" />
+                  Select Violation Type
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  {Object.keys(violationTypes).map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedViolationType(type)}
+                      className={`p-4 rounded-lg border-2 transition-all capitalize font-semibold text-sm ${
+                        selectedViolationType === type
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subcategories */}
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 border border-orange-200">
+                <h5 className="font-semibold text-orange-900 mb-3">Subcategories:</h5>
+                <div className="flex flex-wrap gap-2">
+                  {violationTypes[selectedViolationType]?.map(subType => (
+                    <span 
+                      key={subType} 
+                      className="px-3 py-1 bg-white border border-orange-300 rounded-full text-xs font-medium text-orange-700"
+                    >
+                      {subType.replace('_', ' ')}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ✅ FIX: Display violation type if already resolved */}
-        {isResolved && (
-          <div className="mb-6">
-            <h4 className="font-medium text-gray-700 mb-2">Violation Type</h4>
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <p className="text-gray-600 capitalize font-medium">
+          {/* Display Violation Type if Resolved */}
+          {isResolved && (
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 border border-green-200">
+              <h4 className="font-bold text-green-900 mb-3 flex items-center gap-2">
+                <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                Violation Type
+              </h4>
+              <p className="text-green-700 font-semibold capitalize mb-3">
                 {selectedReport.violationType || 'Not specified'}
               </p>
-              <div className="mt-2">
-                <h5 className="text-sm text-gray-600">Subcategories:</h5>
-                <div className="flex flex-wrap gap-2 mt-1">
+              <div>
+                <h5 className="text-sm font-semibold text-green-900 mb-2">Subcategories:</h5>
+                <div className="flex flex-wrap gap-2">
                   {violationTypes[selectedReport.violationType || 'minor']?.map(type => (
-                    <span key={type} className="px-2 py-1 bg-gray-100 rounded-full text-xs">
+                    <span 
+                      key={type} 
+                      className="px-3 py-1 bg-white border border-green-300 rounded-full text-xs font-medium text-green-700"
+                    >
                       {type.replace('_', ' ')}
                     </span>
                   ))}
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ✅ FIX: Pass violationType to resolve functions */}
+          {/* Resolution Details if Resolved */}
+          {isResolved && (
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-5 border border-purple-200">
+              <h4 className="font-bold text-purple-900 mb-3">Resolution Details</h4>
+              <div className="space-y-2">
+                <p className="text-sm text-purple-700">
+                  <span className="font-semibold">Status:</span>
+                  <span className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(selectedReport.status)}`}>
+                    {selectedReport.status}
+                  </span>
+                </p>
+                <p className="text-sm text-purple-700">
+                  <span className="font-semibold">Resolved on:</span> {selectedReport.updated_at ? new Date(selectedReport.updated_at).toLocaleString() : 'Not resolved'}
+                </p>
+                {selectedReport.adminNotes && (
+                  <p className="text-sm text-purple-700">
+                    <span className="font-semibold">Notes:</span> {selectedReport.adminNotes}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
         {!isResolved && (
-          <div className="flex justify-end space-x-3">
+          <div className="border-t border-gray-200 bg-gray-50 px-8 py-6 flex gap-3">
             <button
               onClick={() => onResolve(selectedReport.id, 'invalid', selectedViolationType)}
-              className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50 font-medium"
+              className="flex-1 px-4 py-3 text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-100 font-semibold transition-all"
             >
               Mark Invalid
             </button>
             <button
               onClick={() => onResolve(selectedReport.id, 'warning', selectedViolationType)}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-lg hover:from-yellow-600 hover:to-yellow-700 font-semibold shadow-md transition-all"
             >
               Issue Warning
             </button>
             <button
               onClick={() => onResolve(selectedReport.id, 'suspended', selectedViolationType)}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 font-semibold shadow-md transition-all"
             >
               Suspend User
             </button>
           </div>
         )}
-
-        {isResolved && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-700 mb-2">Resolution Details</h4>
-            <p className="text-sm text-gray-600">
-              Status: 
-              <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(selectedReport.status)}`}>
-                {selectedReport.status}
-              </span>
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              Resolved on: {selectedReport.updated_at ? new Date(selectedReport.updated_at).toLocaleString() : 'Not resolved'}
-            </p>
-            {selectedReport.adminNotes && (
-              <p className="text-sm text-gray-600 mt-1">
-                Notes: {selectedReport.adminNotes}
-              </p>
-            )}
-          </div>
-        )}
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { 
+            opacity: 0; 
+            transform: translateY(20px); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+        .animate-slideUp { animation: slideUp 0.3s ease-in-out; }
+      `}</style>
     </div>
   );
 };
-
 
 export default function UserReports() {
   const [selectedReport, setSelectedReport] = useState(null);
@@ -167,6 +223,8 @@ export default function UserReports() {
   const [search, setSearch] = useState("");
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -192,7 +250,6 @@ export default function UserReports() {
       
       setReports(response);
       
-      // ✅ FIX: Count all non-pending as resolved
       const pending = response.filter(r => !r.status || r.status === 'pending').length;
       const resolved = response.filter(r => r.status && r.status !== 'pending').length;
       const oneWeekAgo = new Date();
@@ -223,14 +280,13 @@ export default function UserReports() {
     }
   };
 
-  // ✅ FIX: Accept violationType parameter
   const handleResolveReport = async (reportId, resolution, violationType = 'minor') => {
     try {
       console.log('Resolving report:', { reportId, resolution, violationType });
 
       const statusData = {
         status: resolution,
-        violationType: violationType || 'minor',  // ✅ ENSURE violationType is set
+        violationType: violationType || 'minor',
         adminNotes: resolution === 'invalid' 
           ? 'No violation found' 
           : `${violationType} violation confirmed - ${resolution} action taken`,
@@ -241,7 +297,6 @@ export default function UserReports() {
 
       await updateReportStatus(reportId, statusData);
 
-      // Notify users
       const notifications = [
         notifyUser(selectedReport.reporter_id, {
           type: 'report_resolved',
@@ -274,24 +329,24 @@ export default function UserReports() {
   const getStatusBadgeClass = (status) => {
     switch(status) {
       case 'pending':
-        return 'bg-yellow-100 text-yellow-600';
+        return 'bg-yellow-100 text-yellow-700 font-semibold';
       case 'invalid':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-gray-100 text-gray-700 font-semibold';
       case 'warning':
-        return 'bg-orange-100 text-orange-600';
+        return 'bg-orange-100 text-orange-700 font-semibold';
       case 'suspended':
-        return 'bg-red-100 text-red-600';
+        return 'bg-red-100 text-red-700 font-semibold';
       default:
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-gray-100 text-gray-700 font-semibold';
     }
   };
 
-  // ✅ FIX: Filter logic for pending vs resolved
   const filteredReports = reports.filter(report => {
     const matchesSearch = 
       report.reported_user_name?.toLowerCase().includes(search.toLowerCase()) ||
       report.reporter_name?.toLowerCase().includes(search.toLowerCase()) ||
-      report.reason?.toLowerCase().includes(search.toLowerCase());
+      report.reason?.toLowerCase().includes(search.toLowerCase()) ||
+      report.description?.toLowerCase().includes(search.toLowerCase());
 
     const isPending = !report.status || report.status === 'pending';
     const isResolved = report.status && report.status !== 'pending';
@@ -301,160 +356,297 @@ export default function UserReports() {
     return matchesSearch && matchesFilter;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentReports = filteredReports.slice(indexOfFirstItem, indexOfLastItem);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, showHistory]);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Sidebar */}
       <AdminSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-white border-b shadow-sm">
           <div className="flex items-center justify-between px-8 py-6">
-            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-              User Reports
-            </h2>
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center text-white font-semibold">
-                AS
-              </div>
+            <div>
+              <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-red-700">
+                User Reports
+              </h2>
+              <p className="text-gray-500 text-sm mt-1">Manage and resolve community reports</p>
             </div>
           </div>
         </div>
 
-        <div className="p-8 overflow-y-auto h-[calc(100vh-5rem)]">
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="bg-gray-50 p-4 rounded-xl text-center">
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-gray-500 text-sm">Total Reports</p>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-8">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-blue-600 text-sm font-semibold uppercase tracking-wide">Total Reports</p>
+                  <p className="text-3xl font-bold text-blue-900 mt-2">{stats.total}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-200 rounded-lg flex items-center justify-center text-blue-600 text-xl">
+                  📋
+                </div>
+              </div>
             </div>
-            <div className="bg-gray-50 p-4 rounded-xl text-center">
-              <p className="text-2xl font-bold">{stats.pending}</p>
-              <p className="text-gray-500 text-sm">Pending</p>
+
+            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border border-yellow-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-yellow-600 text-sm font-semibold uppercase tracking-wide">Pending</p>
+                  <p className="text-3xl font-bold text-yellow-900 mt-2">{stats.pending}</p>
+                </div>
+                <div className="w-12 h-12 bg-yellow-200 rounded-lg flex items-center justify-center text-yellow-600 text-xl">
+                  ⏳
+                </div>
+              </div>
             </div>
-            <div className="bg-gray-50 p-4 rounded-xl text-center">
-              <p className="text-2xl font-bold">{stats.resolved}</p>
-              <p className="text-gray-500 text-sm">Resolved</p>
+
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-green-600 text-sm font-semibold uppercase tracking-wide">Resolved</p>
+                  <p className="text-3xl font-bold text-green-900 mt-2">{stats.resolved}</p>
+                </div>
+                <div className="w-12 h-12 bg-green-200 rounded-lg flex items-center justify-center text-green-600 text-xl">
+                  ✓
+                </div>
+              </div>
             </div>
-            <div className="bg-gray-50 p-4 rounded-xl text-center">
-              <p className="text-2xl font-bold">{stats.thisWeek}</p>
-              <p className="text-gray-500 text-sm">This Week</p>
+
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-purple-600 text-sm font-semibold uppercase tracking-wide">This Week</p>
+                  <p className="text-3xl font-bold text-purple-900 mt-2">{stats.thisWeek}</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-200 rounded-lg flex items-center justify-center text-purple-600 text-xl">
+                  📊
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Filter & Search */}
-          <div className="flex justify-between items-center mb-4">
-            <div className="relative w-64">
-              <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+          <div className="flex justify-between items-center gap-4 bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <div className="relative flex-1 max-w-sm">
+              <MagnifyingGlassIcon className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search reports..."
-                className="pl-10 pr-3 py-2 w-full border rounded-lg focus:ring focus:ring-gray-300"
+                placeholder="Search by reported user, reporter, or reason..."
+                className="pl-10 pr-4 py-2.5 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
             </div>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                showHistory 
-                  ? 'bg-blue-100 text-blue-600' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <ClockIcon className="w-5 h-5 mr-2" />
-              {showHistory ? 'Pending Reports' : 'History'}
-            </button>
+
+            {/* Status Filters */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowHistory(false)}
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                  !showHistory 
+                    ? 'bg-yellow-500 text-white shadow-md' 
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                <span className="text-lg">⏳</span> Pending
+              </button>
+              <button
+                onClick={() => setShowHistory(true)}
+                className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                  showHistory 
+                    ? 'bg-green-500 text-white shadow-md' 
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                <span className="text-lg">✓</span> Resolved
+              </button>
+            </div>
           </div>
 
           {/* Reports Table */}
-          <div className="overflow-x-auto">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" style={{ maxHeight: '500px' }}>
             {isLoading ? (
-              <div className="text-center py-8">Loading reports...</div>
+              <div className="text-center py-16">
+                <div className="inline-flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                  <span className="text-gray-600 font-medium">Loading reports...</span>
+                </div>
+              </div>
             ) : filteredReports.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No reports found
+              <div className="text-center py-16">
+                <div className="text-5xl mb-4">📭</div>
+                <p className="text-gray-600 font-medium">No reports found</p>
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b text-gray-500">
-                    <th className="py-2">Reported User</th>
-                    <th className="py-2">Reporter</th>
-                    <th className="py-2">Reason</th>
-                    <th className="py-2">Date</th>
-                    <th className="py-2">Status</th>
-                    <th className="py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredReports.map((report) => (
-                    <tr key={report.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3">
-                        <p className="font-medium">{report.reported_user_name}</p>
-                        <p className="text-gray-500 text-xs">ID: {report.reported_user_id}</p>
-                      </td>
-                      <td>
-                        <p className="font-medium">{report.reporter_name}</p>
-                        <p className="text-gray-500 text-xs">ID: {report.reporter_id}</p>
-                      </td>
-                      <td>
-                        <p>{report.reason}</p>
-                        {report.description && (
-                          <p className="text-gray-500 text-xs truncate max-w-xs">
-                            {report.description}
-                          </p>
-                        )}
-                      </td>
-                      <td>{new Date(report.created_at).toLocaleDateString()}</td>
-                      <td>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            getStatusBadgeClass(report.status)
-                          }`}
-                        >
-                          {report.status || 'pending'}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <button 
-                          className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
-                          onClick={() => handleViewDetails(report)}
-                        >
-                          View Details
-                        </button>
-                      </td>
+              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '500px' }}>
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Reported User</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Reporter</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Reason</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {currentReports.map((report) => (
+                      <tr key={report.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-gray-900">{report.reported_user_name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">ID: {report.reported_user_id}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-gray-900">{report.reporter_name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">ID: {report.reporter_id}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-gray-900">{report.reason}</p>
+                          {report.description && (
+                            <p className="text-xs text-gray-500 truncate max-w-xs mt-0.5">
+                              {report.description}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {new Date(report.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold ${
+                              getStatusBadgeClass(report.status)
+                            }`}
+                          >
+                            {report.status || 'pending'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 rounded-lg hover:from-red-600 hover:to-red-700 transition-all shadow-sm hover:shadow-md"
+                            onClick={() => handleViewDetails(report)}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
           {/* Pagination */}
-          <div className="flex justify-between items-center mt-4">
-            <p className="text-sm text-gray-500">
-              Showing 1 to {filteredReports.length} of {reports.length} results
-            </p>
-            <div className="flex space-x-2">
-              <button className="p-2 border rounded-lg hover:bg-gray-200">
-                <ChevronLeftIcon className="h-5 w-5" />
-              </button>
-              <button className="px-3 py-1 border rounded-lg bg-black text-white">
-                1
-              </button>
-              <button className="px-3 py-1 border rounded-lg hover:bg-gray-200">
-                2
-              </button>
-              <button className="px-3 py-1 border rounded-lg hover:bg-gray-200">
-                3
-              </button>
-              <button className="p-2 border rounded-lg hover:bg-gray-200">
-                <ChevronRightIcon className="h-5 w-5" />
-              </button>
+          {filteredReports.length > 0 && totalPages > 1 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-600 font-medium text-center mb-4">
+                Showing <span className="font-bold">{indexOfFirstItem + 1}</span> to <span className="font-bold">{Math.min(indexOfLastItem, filteredReports.length)}</span> of <span className="font-bold">{filteredReports.length}</span> reports
+              </p>
+              <div className="flex justify-center gap-2">
+                <button 
+                  onClick={handlePrevPage}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeftIcon className="h-5 w-5 text-gray-600" />
+                </button>
+                
+                {getPageNumbers().map((page, index) => (
+                  page === '...' ? (
+                    <span key={`ellipsis-${index}`} className="px-4 py-2 text-gray-400">...</span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`min-w-[40px] px-4 py-2 border border-gray-300 rounded-lg font-semibold transition-all ${
+                        currentPage === page
+                          ? 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                ))}
+                
+                <button 
+                  onClick={handleNextPage}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRightIcon className="h-5 w-5 text-gray-600" />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
         </div>
       </div>
 

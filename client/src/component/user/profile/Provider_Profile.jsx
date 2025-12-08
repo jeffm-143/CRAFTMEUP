@@ -17,6 +17,7 @@ const ProviderProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showAllReviewsModal, setShowAllReviewsModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -119,12 +120,19 @@ const ProviderProfile = () => {
     return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  const getServiceForFeedback = (feedback) => {
+    return services.find(s => s.id === feedback.service_id);
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading provider profile...</p>
+          <div className="relative w-16 h-16 mx-auto mb-4">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-spin"></div>
+            <div className="absolute inset-2 rounded-full bg-white"></div>
+          </div>
+          <p className="text-gray-600 font-semibold">Loading provider profile...</p>
         </div>
       </div>
     );
@@ -132,12 +140,12 @@ const ProviderProfile = () => {
 
   if (error || !provider) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center p-4">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error || 'Provider not found'}</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+        <div className="text-center bg-white rounded-3xl p-8 shadow-xl">
+          <p className="text-red-500 mb-4 font-semibold">{error || 'Provider not found'}</p>
           <button
             onClick={() => navigate('/find-services')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl hover:from-blue-700 hover:to-purple-700 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
           >
             Back to Services
           </button>
@@ -149,49 +157,53 @@ const ProviderProfile = () => {
   const averageRating = calculateAverageRating();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 pb-8">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sticky top-0 z-20 shadow-lg">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 hover:bg-white/10 p-2 rounded-lg transition-colors"
+          className="relative flex items-center gap-3 hover:bg-white/20 p-3 rounded-2xl transition-all duration-200 backdrop-blur-sm"
         >
           <ArrowLeftIcon className="h-6 w-6" />
-          <span className="text-lg font-semibold">Provider Profile</span>
+          <span className="text-xl font-bold">Provider Profile</span>
         </button>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         {/* Profile Card */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-          <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b">
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl mb-6 border border-white/50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
+          
+          <div className="relative flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-gray-200">
             <div className="flex-shrink-0">
               {provider.profile_image ? (
                 <img
                   src={provider.profile_image}
                   alt={provider.full_name}
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-blue-200"
+                  className="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover border-4 border-gradient-to-r from-blue-500 to-purple-500 shadow-xl"
                 />
               ) : (
-                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-4xl font-bold border-4 border-blue-200">
+                <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold border-4 border-white shadow-xl">
                   {provider.full_name?.charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
 
             <div className="flex-1 text-center sm:text-left">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{provider.full_name}</h1>
-              <p className="text-gray-600 mb-3">{provider.email}</p>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent mb-3">{provider.full_name}</h1>
+              <p className="text-gray-600 mb-4 text-lg">{provider.email}</p>
               
-              <div className="flex items-center gap-3 justify-center sm:justify-start mb-4">
+              <div className="flex items-center gap-4 justify-center sm:justify-start mb-4">
                 <div className="flex gap-0.5">
                   {renderStars(averageRating)}
                 </div>
-                <span className="text-xl font-bold text-blue-600">{averageRating}/5</span>
-                <span className="text-gray-600">({feedbacks.length} Reviews)</span>
+                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{averageRating}/5</span>
+                <span className="text-gray-600 font-medium">({feedbacks.length} Reviews)</span>
               </div>
 
-              <span className="inline-block px-4 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
+              <span className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full text-sm font-bold shadow-sm">
+                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
                 {provider.role}
               </span>
             </div>
@@ -199,38 +211,42 @@ const ProviderProfile = () => {
         </div>
 
         {/* Services Offered */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Services Offered</h2>
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl mb-6 border border-white/50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
+          
+          <div className="relative flex items-center gap-3 mb-6">
+            <div className="h-8 w-1 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Services Offered</h2>
+          </div>
           
           {services.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No services available</p>
+            <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50 rounded-3xl">
+              <p className="text-gray-500 font-medium">No services available</p>
+            </div>
           ) : (
-            <div className="space-y-3 max-h-80 overflow-y-auto">
+            <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar pr-2">
               {services.map((service) => (
-                <div key={service.id} className="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-gray-900 text-lg">{service.title}</h3>
-                    <span className="text-blue-600 font-bold text-lg">SC {service.price}</span>
-                  </div>
-                  <p className="text-gray-600 text-sm line-clamp-2">{service.description}</p>
+                <div key={service.id} className="group bg-white hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 p-6 border border-gray-200 rounded-3xl hover:shadow-xl transition-all duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-500"></div>
                   
-                  {service.average_rating > 0 && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="flex gap-0.5">
-                        {renderStars(service.average_rating)}
-                      </div>
-                      <span className="text-xs text-gray-600">
-                        {parseFloat(service.average_rating).toFixed(1)} ({service.total_ratings})
-                      </span>
+                  <div className="relative">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="font-bold text-gray-900 text-xl group-hover:text-blue-600 transition-colors">{service.title}</h3>
+                      <span className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-lg rounded-xl shadow-lg">SC {service.price}</span>
                     </div>
-                  )}
-
-                  <button
-                    onClick={() => navigate('/find-services')}
-                    className="mt-3 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                  >
-                    Book Now
-                  </button>
+                    <p className="text-gray-600 text-sm leading-relaxed line-clamp-2 mb-3">{service.description}</p>
+                    
+                    {service.average_rating > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-0.5">
+                          {renderStars(service.average_rating)}
+                        </div>
+                        <span className="text-sm text-gray-600 font-medium">
+                          {parseFloat(service.average_rating).toFixed(1)} ({service.total_ratings})
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -238,30 +254,56 @@ const ProviderProfile = () => {
         </div>
 
         {/* Recent Reviews */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Recent Reviews</h2>
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl mb-6 border border-white/50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
+          
+          <div className="relative flex items-center gap-3 mb-6">
+            <div className="h-8 w-1 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Recent Reviews</h2>
+          </div>
           
           {feedbacks.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No reviews yet</p>
+            <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50 rounded-3xl">
+              <p className="text-gray-500 font-medium">No reviews yet</p>
+            </div>
           ) : (
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {feedbacks.slice(0, 5).map((feedback) => (
-                <div key={feedback.id} className="p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-gray-900">{feedback.learner_name || 'Anonymous'}</h4>
-                    <div className="flex gap-0.5">
-                      {renderStars(feedback.rating)}
+            <div className="space-y-4 max-h-[32rem] overflow-y-auto custom-scrollbar pr-2">
+              {feedbacks.slice(0, 5).map((feedback) => {
+                const service = getServiceForFeedback(feedback);
+                return (
+                  <div key={feedback.id} className="group bg-white hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 p-6 border border-gray-200 rounded-3xl hover:shadow-xl transition-all duration-300 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-500"></div>
+                    
+                    <div className="relative">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-bold text-gray-900 text-lg mb-1">{feedback.learner_name || 'Anonymous'}</h4>
+                          {service && (
+                            <p className="text-sm text-gray-600 mb-2">
+                              <span className="font-semibold">Service:</span> {service.title}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-0.5">
+                          {renderStars(feedback.rating)}
+                        </div>
+                      </div>
+                      
+                      {feedback.comment && (
+                        <p className="text-gray-700 text-sm leading-relaxed mb-3 italic">"{feedback.comment}"</p>
+                      )}
+                      
+                      <p className="text-xs text-gray-500 font-medium">{formatDate(feedback.created_at)}</p>
                     </div>
                   </div>
-                  {feedback.comment && (
-                    <p className="text-gray-700 text-sm mb-2">"{feedback.comment}"</p>
-                  )}
-                  <p className="text-xs text-gray-500">{formatDate(feedback.created_at)}</p>
-                </div>
-              ))}
+                );
+              })}
               
               {feedbacks.length > 5 && (
-                <button className="w-full mt-4 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium">
+                <button 
+                  onClick={() => setShowAllReviewsModal(true)}
+                  className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                >
                   View All Reviews ({feedbacks.length})
                 </button>
               )}
@@ -272,34 +314,89 @@ const ProviderProfile = () => {
         {/* Report User Button */}
         <button
           onClick={() => setShowReportModal(true)}
-          className="w-full px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold flex items-center justify-center gap-2 transition-colors"
+          className="w-full px-6 py-4 bg-gradient-to-r from-red-100 to-pink-100 hover:from-red-200 hover:to-pink-200 text-red-700 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
         >
-          <ExclamationTriangleIcon className="h-5 w-5" />
+          <ExclamationTriangleIcon className="h-6 w-6" />
           Report User
         </button>
       </div>
 
-      {/* Report Modal */}
-      {showReportModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">Report User</h2>
+      {/* All Reviews Modal */}
+      {showAllReviewsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white p-6 flex justify-between items-center">
+              <h2 className="text-2xl font-bold">All Reviews ({feedbacks.length})</h2>
               <button
-                onClick={() => setShowReportModal(false)}
-                className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-100 rounded-lg"
+                onClick={() => setShowAllReviewsModal(false)}
+                className="text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-200"
               >
                 <XMarkIcon className="h-6 w-6" />
               </button>
             </div>
 
-            <form onSubmit={handleReportSubmit} className="space-y-4">
+            <div className="p-6 overflow-y-auto custom-scrollbar">
+              <div className="space-y-4">
+                {feedbacks.map((feedback) => {
+                  const service = getServiceForFeedback(feedback);
+                  return (
+                    <div key={feedback.id} className="group bg-gradient-to-br from-gray-50 to-blue-50 hover:from-blue-50 hover:to-purple-50 p-6 rounded-3xl border border-gray-200 hover:shadow-xl transition-all duration-300 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-500"></div>
+                      
+                      <div className="relative">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex-1">
+                            <h4 className="font-bold text-gray-900 text-lg mb-2">{feedback.learner_name || 'Anonymous'}</h4>
+                            {service && (
+                              <div className="mb-2">
+                                <p className="text-sm font-semibold text-gray-700 mb-1">Service: {service.title}</p>
+                                <p className="text-xs text-gray-600 line-clamp-1">{service.description}</p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-0.5 flex-shrink-0 ml-3">
+                            {renderStars(feedback.rating)}
+                          </div>
+                        </div>
+                        
+                        {feedback.comment && (
+                          <div className="bg-white/70 rounded-2xl p-4 mb-3">
+                            <p className="text-gray-700 text-sm leading-relaxed italic">"{feedback.comment}"</p>
+                          </div>
+                        )}
+                        
+                        <p className="text-xs text-gray-500 font-medium">{formatDate(feedback.created_at)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Report User</h2>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReportSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Reason for Report</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Reason for Report</label>
                 <select
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-blue-500 transition-colors"
                 >
                   <option value="">Select a reason</option>
                   <option value="Inappropriate Behavior">Inappropriate Behavior</option>
@@ -312,20 +409,20 @@ const ProviderProfile = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Description</label>
                 <textarea
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}
                   placeholder="Please provide details about your report..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-blue-500 resize-none transition-colors"
                   rows="4"
                   maxLength="500"
                 ></textarea>
-                <p className="text-xs text-gray-500 mt-1">{reportDescription.length}/500 characters</p>
+                <p className="text-xs text-gray-500 mt-2 font-medium">{reportDescription.length}/500 characters</p>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-xs text-blue-700">
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-2xl p-4">
+                <p className="text-xs text-blue-700 leading-relaxed">
                   <strong>Note:</strong> False reports may result in your account being suspended. Please ensure all information is accurate.
                 </p>
               </div>
@@ -334,14 +431,14 @@ const ProviderProfile = () => {
                 <button
                   type="button"
                   onClick={() => setShowReportModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-2xl hover:bg-gray-50 font-bold transition-all duration-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingReport || !reportReason || !reportDescription}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
                   {submittingReport ? 'Submitting...' : 'Submit Report'}
                 </button>
@@ -350,6 +447,26 @@ const ProviderProfile = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(to bottom, #3b82f6, #8b5cf6);
+          border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(to bottom, #2563eb, #7c3aed);
+        }
+      `}</style>
     </div>
   );
 };

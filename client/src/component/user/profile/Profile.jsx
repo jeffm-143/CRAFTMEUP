@@ -317,7 +317,6 @@ export default function Profile() {
 
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-2 gap-2">
       <span className="text-gray-700 font-medium text-sm">Role: {userData?.role || 'User'}</span>
-      <button className="text-blue-500 text-xs sm:text-sm hover:text-blue-600 transition-colors">Request Change</button>
     </div>
 
     {renderVerificationStatus()}

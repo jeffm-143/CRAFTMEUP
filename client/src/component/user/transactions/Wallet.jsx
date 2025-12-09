@@ -16,7 +16,7 @@ import {
   ArrowUpTrayIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from 'react-router-dom'
-import { getWalletBalance, getUserWalletHistory, createWalletRequest } from '../../../services/api';
+import { getWalletBalance, getUserWalletHistory, createWalletRequest, getNotifications } from '../../../services/api';
 
 export default function Wallet() {
   const [userData, setUserData] = useState(null);
@@ -29,6 +29,7 @@ export default function Wallet() {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [proofFile, setProofFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Add to all components
 const role = userData?.role?.toLowerCase() || '';
@@ -77,8 +78,23 @@ const navItems = (() => {
 
 
   useEffect(() => {
-  const storedUser = JSON.parse(localStorage.getItem('user'));
-  setUserData(storedUser);
+  const loadNotifications = async () => {
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    setUserData(storedUser);
+    
+    // Fetch unread notifications count
+    if (storedUser?.id) {
+      try {
+        const notificationsResponse = await getNotifications(storedUser.id);
+        const unread = notificationsResponse.filter(n => !n.read).length;
+        setUnreadCount(unread);
+      } catch (notifError) {
+        console.error('Error fetching notifications:', notifError);
+      }
+    }
+  };
+  
+  loadNotifications();
 }, []);
 
   useEffect(() => {
@@ -291,7 +307,11 @@ const handleSubmitRequest = async () => {
               className="flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors relative"
             >
               <BellIcon className="h-6 w-6" />
-              <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

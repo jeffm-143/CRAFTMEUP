@@ -18,7 +18,7 @@ import {
   StarIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
-import { getAllServices, createBooking, bookmarkService, unbookmarkService, getSavedServices } from "../../../services/api";
+import { getAllServices, createBooking, bookmarkService, unbookmarkService, getSavedServices, getNotifications } from "../../../services/api";
 import io from "socket.io-client";
 
 // Star Rating Display Component
@@ -433,6 +433,7 @@ const FindServices = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [selectedFeedbackService, setSelectedFeedbackService] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const socketRef = useRef(null);
 
   const categories = [
@@ -494,6 +495,17 @@ const FindServices = () => {
       loadBookmarkedServices();
     }
   }, [userData]);
+
+  // Fetch unread notifications count
+  useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    if (storedUser?.id) {
+      getNotifications(storedUser.id).then(notificationsResponse => {
+        const unread = notificationsResponse.filter(n => !n.read).length;
+        setUnreadCount(unread);
+      }).catch(err => console.error('Error fetching notifications:', err));
+    }
+  }, []);
 
   const loadBookmarkedServices = async () => {
     try {
@@ -869,7 +881,11 @@ const handleConfirmBooking = async (service) => {
                 className="hover:bg-white/10 p-2 rounded-lg transition-colors relative"
               >
                 <BellIcon className="h-6 w-6" />
-                <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
               <button 
                 onClick={() => setShowFilters((prev) => !prev)} 

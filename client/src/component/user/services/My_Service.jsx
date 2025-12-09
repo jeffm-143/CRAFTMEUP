@@ -24,6 +24,7 @@ import {
   getUserServices,
   updateService,
   deleteService,
+  getNotifications,
 } from "../../../services/api";
 import Toast from "../../common/Toast";
 
@@ -78,6 +79,7 @@ export default function MyServices() {
   const [editingService, setEditingService] = useState(null);
   const [toast, setToast] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [newService, setNewService] = useState({
     title: "",
     description: "",
@@ -171,6 +173,17 @@ export default function MyServices() {
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
+  }, []);
+
+  // Fetch unread notifications count
+  useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    if (storedUser?.id) {
+      getNotifications(storedUser.id).then(notificationsResponse => {
+        const unread = notificationsResponse.filter(n => !n.read).length;
+        setUnreadCount(unread);
+      }).catch(err => console.error('Error fetching notifications:', err));
+    }
   }, []);
 
   useEffect(() => {
@@ -686,7 +699,11 @@ const fetchUserServices = async () => {
                 className="hover:bg-white/10 p-2 rounded-lg transition-colors relative"
               >
                 <BellIcon className="h-6 w-6" />
-                <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => {

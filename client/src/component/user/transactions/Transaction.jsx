@@ -20,7 +20,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FiAlertTriangle } from "react-icons/fi";
-import { createNotification } from '../../../services/api';
+import { createNotification, getNotifications } from '../../../services/api';
 import { getUserBookings, updateTransactionStatus, getWalletBalance, transferFunds } from '../../../services/api';
 
 function ConfirmPayment({ booking, userWallet, onConfirm, onClose }) {
@@ -104,6 +104,7 @@ export default function Transaction() {
   const [showPastTransactionsModal, setShowPastTransactionsModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
   const socketRef = useRef(null);
 
   const role = userData?.role?.toLowerCase() || '';
@@ -201,6 +202,20 @@ export default function Transaction() {
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
+    
+    // Fetch unread notifications count
+    if (storedUser?.id) {
+      try {
+        getNotifications(storedUser.id).then(notificationsResponse => {
+          const unread = notificationsResponse.filter(n => !n.read).length;
+          setUnreadCount(unread);
+        }).catch(notifError => {
+          console.error('Error fetching notifications:', notifError);
+        });
+      } catch (notifError) {
+        console.error('Error fetching notifications:', notifError);
+      }
+    }
   }, []);
 
   // ✅ Fetch data when component mounts or when returning from navigation
@@ -797,7 +812,11 @@ newSocket.on('booking-created', (data) => {
               className="flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors relative"
             >
               <BellIcon className="h-6 w-6" />
-              <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

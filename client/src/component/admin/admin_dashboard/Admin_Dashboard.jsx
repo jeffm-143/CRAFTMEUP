@@ -292,6 +292,109 @@ const handleWalletRequestUpdate = async (newStatus) => {
     });
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    if (activities.length === 0) {
+      alert('No activities to export');
+      return;
+    }
+
+    const headers = ['Date & Time', 'User Name', 'Email', 'Role', 'Activity Type', 'Details', 'Status'];
+    const rows = activities.map(activity => [
+      formatDateTime(activity.created_at),
+      activity.full_name,
+      activity.email,
+      activity.role,
+      activity.activity_type,
+      activity.details,
+      activity.status
+    ]);
+
+    let csvContent = 'data:text/csv;charset=utf-8,';
+    csvContent += headers.join(',') + '\n';
+    rows.forEach(row => {
+      csvContent += row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(',') + '\n';
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `activities_${filterType}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    if (activities.length === 0) {
+      alert('No activities to export');
+      return;
+    }
+
+    // Dynamic import to avoid loading library unnecessarily
+    import('html2pdf.js').then(({ default: html2pdf }) => {
+      const element = document.createElement('div');
+      element.style.padding = '20px';
+      element.style.fontFamily = 'Arial, sans-serif';
+      element.style.fontSize = '10px';
+
+      let htmlContent = `
+        <h1 style="text-align: center; color: #1f2937; margin-bottom: 20px;">
+          Activities Report - ${filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+        </h1>
+        <p style="text-align: center; color: #6b7280; margin-bottom: 20px;">
+          Generated on ${new Date().toLocaleString()}
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background-color: #f3f4f6; border-bottom: 2px solid #d1d5db;">
+              <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">Date & Time</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">User Name</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">Email</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">Role</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">Activity Type</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #d1d5db;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      activities.forEach((activity, idx) => {
+        const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+        htmlContent += `
+          <tr style="background-color: ${bgColor}; border-bottom: 1px solid #d1d5db;">
+            <td style="padding: 8px; border: 1px solid #d1d5db;">${formatDateTime(activity.created_at)}</td>
+            <td style="padding: 8px; border: 1px solid #d1d5db;">${activity.full_name}</td>
+            <td style="padding: 8px; border: 1px solid #d1d5db;">${activity.email}</td>
+            <td style="padding: 8px; border: 1px solid #d1d5db;">${activity.role}</td>
+            <td style="padding: 8px; border: 1px solid #d1d5db;">${activity.activity_type}</td>
+            <td style="padding: 8px; border: 1px solid #d1d5db;">${activity.status}</td>
+          </tr>
+        `;
+      });
+
+      htmlContent += `
+          </tbody>
+        </table>
+      `;
+
+      element.innerHTML = htmlContent;
+
+      const opt = {
+        margin: 10,
+        filename: `activities_${filterType}_${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' }
+      };
+
+      html2pdf().set(opt).from(element).save();
+    }).catch(() => {
+      alert('PDF export library not available. Please use Excel export instead.');
+    });
+  };
+
   const renderDetailCard = (icon, label, value, isHighlight = false, isBadge = false) => {
     return (
       <div className={`p-4 rounded-lg border transition-all ${isHighlight ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200' : 'bg-white border-gray-200 hover:shadow-md'}`}>
@@ -452,7 +555,7 @@ const handleWalletRequestUpdate = async (newStatus) => {
         )}
 
           {/* Filter and Search */}
-          <div className="mb-6 flex gap-4">
+          <div className="mb-6 flex gap-4 items-center flex-wrap">
             <select
               value={filterType}
               onChange={(e) => {
@@ -492,6 +595,28 @@ const handleWalletRequestUpdate = async (newStatus) => {
                   <XMarkIcon className="w-5 h-5" />
                 </button>
               )}
+            </div>
+
+            {/* Export Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={exportToExcel}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2 whitespace-nowrap"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2H3V4zm0 5h14v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9zm0-3v3h14V6H3z" />
+                </svg>
+                Excel
+              </button>
+              <button
+                onClick={exportToPDF}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium flex items-center gap-2 whitespace-nowrap"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H4a1 1 0 110-2V4zm3 5a1 1 0 000 2h.01a1 1 0 000-2H7zm3 0a1 1 0 000 2h3a1 1 0 000-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" />
+                </svg>
+                PDF
+              </button>
             </div>
           </div>
 

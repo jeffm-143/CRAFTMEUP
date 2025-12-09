@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { getConversations } from '../../../services/api';
+import { getConversations, getNotifications } from '../../../services/api';
 import {
   HomeIcon,
   UserIcon,
@@ -26,6 +26,7 @@ export default function Messages() {
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -62,6 +63,18 @@ export default function Messages() {
     // Fetch conversations
     if (storedUser?.id) {
       fetchConversations(storedUser.id);
+      
+      // Fetch unread notifications count
+      const fetchNotifications = async () => {
+        try {
+          const notificationsResponse = await getNotifications(storedUser.id);
+          const unread = notificationsResponse.filter(n => !n.read).length;
+          setUnreadCount(unread);
+        } catch (notifError) {
+          console.error('Error fetching notifications:', notifError);
+        }
+      };
+      fetchNotifications();
     }
 
     return () => {
@@ -209,7 +222,11 @@ export default function Messages() {
               className="flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors relative"
             >
               <BellIcon className="h-6 w-6" />
-              <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

@@ -6,27 +6,35 @@ const pool = require('../config/database');
 const nodemailer = require('nodemailer');
 
 // Configure nodemailer with SERVICE email (not user's email)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  secure: false,
-  requireTLS: true
-});
+const emailUser = process.env.EMAIL_USER;
+const emailPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
 
-// Test connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email service error:', error);
-  } else {
-    console.log('✓ Email service is ready');
-  }
-});
+let transporter = null;
+if (emailUser && emailPass) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: emailUser,
+      pass: emailPass
+    },
+    tls: {
+      rejectUnauthorized: false
+    },
+    secure: false,
+    requireTLS: true
+  });
+
+  // Test connection on startup
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('Email service error:', error);
+    } else {
+      console.log('✓ Email service is ready');
+    }
+  });
+} else {
+  console.warn('Email credentials not set. Set `EMAIL_USER` and `EMAIL_PASSWORD` (or `EMAIL_PASS`) in .env. Email sending is disabled.');
+}
 
 const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -34,12 +42,18 @@ const generateVerificationCode = () => {
 
 const sendEmail = async (recipientEmail, subject, htmlContent) => {
   try {
+    if (!transporter) {
+      console.warn('Skipping email send: transporter not configured (missing credentials).');
+      return false;
+    }
+
     await transporter.sendMail({
-      from: `"CraftMeUp" <${process.env.EMAIL_USER}>`,
+      from: `"CraftMeUp" <${emailUser}>`,
       to: recipientEmail,
       subject: subject,
       html: htmlContent
     });
+
     return true;
   } catch (error) {
     console.error('Email sending error:', error);

@@ -19,7 +19,7 @@ import {
   ClockIcon
 } from "@heroicons/react/24/outline";
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import api, { getNotifications } from '../../../services/api';
 import defaultProfileImage from '../../../default/default.jpg';
 
 export default function Profile() {
@@ -32,6 +32,7 @@ export default function Profile() {
   const [profileImage, setProfileImage] = useState(defaultProfileImage);
   const [tempProfileImage, setTempProfileImage] = useState(defaultProfileImage);
   const [isSaving, setIsSaving] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Fetch user data from API
   useEffect(() => {
@@ -64,6 +65,15 @@ export default function Profile() {
           setTempProfileImage(freshUserData.profileImage || defaultProfileImage);
           localStorage.setItem('user', JSON.stringify(freshUserData));
           setLoading(false);
+          
+          // Fetch unread notifications count
+          try {
+            const notificationsResponse = await getNotifications(user.id);
+            const unread = notificationsResponse.filter(n => !n.read).length;
+            setUnreadCount(unread);
+          } catch (notifError) {
+            console.error('Error fetching notifications:', notifError);
+          }
         }
       } catch (error) {
         console.error('Error fetching user data:', error.response?.data || error.message);
@@ -433,7 +443,11 @@ export default function Profile() {
               className="flex-shrink-0 hover:bg-white/10 p-2 rounded-lg transition-colors relative"
             >
               <BellIcon className="h-6 w-6" />
-              <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

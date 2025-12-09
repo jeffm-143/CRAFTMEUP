@@ -13,6 +13,32 @@ exports.createFeedback = async (req, res) => {
             [service_id, user_id, rating, comment || null]
         );
 
+        // ✅ Get service details to find tutor_id and learner details
+        const [serviceData] = await pool.execute(
+            'SELECT s.user_id as tutor_id, u.full_name as learner_name FROM services s JOIN users u ON u.id = ? WHERE s.id = ?',
+            [user_id, service_id]
+        );
+
+        if (serviceData.length > 0) {
+            const { tutor_id, learner_name } = serviceData[0];
+
+            // ✅ Create notification for the tutor
+            const notificationContent = `You received a ${rating}-star feedback from ${learner_name}${comment ? `:\n"${comment.substring(0, 50)}${comment.length > 50 ? '..."' : '"'}` : ''}`;
+            
+            await pool.execute(
+                'INSERT INTO notifications (user_id, type, title, content, `read`) VALUES (?, ?, ?, ?, ?)',
+                [
+                    tutor_id,
+                    'feedback_received',
+                    'New Feedback Received',
+                    notificationContent,
+                    false
+                ]
+            );
+
+            console.log(`✅ Notification created for tutor ${tutor_id} about feedback from ${learner_name}`);
+        }
+
         res.status(201).json({
             message: 'Feedback submitted successfully',
             feedbackId: result.insertId

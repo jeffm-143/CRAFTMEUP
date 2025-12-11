@@ -115,7 +115,22 @@ exports.createFeedbackNotification = async (req, res) => {
 
 exports.createTutorRequestNotification = async (req, res) => {
   try {
-  
+    const { tutorId, learnerName } = req.body;
+    
+    // Validate input
+    if (!tutorId || !learnerName) {
+      return res.status(400).json({
+        success: false,
+        message: 'tutorId and learnerName are required'
+      });
+    }
+    
+    const notificationData = {
+      userId: tutorId,
+      type: 'tutor_request',
+      title: '📋 New Tutor Request',
+      content: `You got a Tutor request from ${learnerName}`
+    };
     
     const [result] = await db.query(
       'INSERT INTO notifications (user_id, type, title, content, `read`) VALUES (?, ?, ?, ?, ?)',
@@ -139,6 +154,9 @@ exports.createTutorRequestNotification = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating tutor request notification:', error);
-    res.status(500).json({ success: false, message: 'Failed to create tutor request notification' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create tutor request notification' 
+    });
   }
 };

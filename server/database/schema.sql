@@ -12,8 +12,6 @@ CREATE TABLE users (
   profile_image LONGTEXT,
   study_load_file BLOB,
   student_id_file BLOB,
-  reset_token VARCHAR(255),
-  reset_token_expires TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

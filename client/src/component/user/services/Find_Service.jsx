@@ -750,6 +750,17 @@ const FindServices = () => {
 const handleConfirmBooking = async (service) => {
   try {
     const user = JSON.parse(localStorage.getItem('user'));
+    // ✅ ADD THESE DEBUG LOGS
+    console.log('🔍 Full user object:', user);
+    console.log('🔍 user.fullName:', user?.fullName);
+    console.log('🔍 user.full_name:', user?.full_name);
+    console.log('🔍 user.name:', user?.name);
+    
+    // ✅ This is what fixed it - using fullName (camelCase)
+    const learnerName = user?.full_name;
+    console.log('🔍 Final learnerName BEFORE emit:', learnerName);
+
+    
     const bookingData = {
       userId: user.id,
       serviceId: service.id,
@@ -759,20 +770,16 @@ const handleConfirmBooking = async (service) => {
       status: 'pending'
     };
 
-    console.log('📝 Creating booking with data:', bookingData);
     const response = await createBooking(bookingData);
-    
-    console.log('✅ Booking response:', response);
     
     if (response.data) {
       setSelectedService(null);
       
-      // ✅ EMIT SOCKET EVENT TO NOTIFY TRANSACTION PAGE
-      if (socketRef.current) {
-        console.log('📢 Emitting booking-created event via Socket.IO');
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('booking-created', {
           bookingId: response.data.id,
           userId: user.id,
+          learnerName: learnerName,
           serviceId: service.id,
           providerId: service.user_id,
           status: 'pending',
@@ -781,10 +788,6 @@ const handleConfirmBooking = async (service) => {
         });
       }
       
-      // Wait a bit for backend to process
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Navigate with refresh state
       navigate('/transactions', { 
         replace: true,
         state: { 

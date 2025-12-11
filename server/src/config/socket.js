@@ -25,25 +25,42 @@ const initializeSocket = (server) => {
       }
       activeUsers[userId] = socket.id;
       console.log('🟢 User online:', userId);
+
+      socket.join(`user-${userId}`);
+
+        console.log('🟢 User online:', userId, 'in room:', `user-${userId}`);
+     console.log('📊 Active users:', Object.keys(activeUsers).length);
     });
 
-        socket.on('booking-created', (data) => {
-      console.log('📝 Booking created event received:', data);
-      
-      // ✅ BROADCAST TO ALL CONNECTED CLIENTS
-      io.emit('booking-created', {
-        bookingId: data.bookingId,
-        userId: data.userId,
-        serviceId: data.serviceId,
-        providerId: data.providerId,
-        status: 'pending',
-        price: data.price,
-        timestamp: new Date()
-      });
-      
-      console.log('📢 Broadcasting booking-created to all clients');
-    });
 
+socket.on('booking-created', (data) => {
+  console.log('📝 Booking created event received:', data);
+  console.log('📝 Booking will be sent to tutor:', data.providerId);
+  
+  if (!data.providerId) {
+    console.error('❌ booking-created received without providerId');
+    return;
+  }
+  
+  // ✅ Send ONLY to the tutor's room
+  io.to(`user-${data.providerId}`).emit('booking-created', {
+    bookingId: data.bookingId,
+    userId: data.userId,
+    providerId: data.providerId,
+    status: data.status,
+    learnerName: data.learnerName,
+    price: data.price,
+    timestamp: new Date()
+  });
+  
+  console.log('✅ booking-created event emitted to tutor room:', `user-${data.providerId}`);
+});
+
+      // ✅ Handle tutor request
+  socket.on('tutor-request-created', (data) => {
+    console.log('📋 Tutor request created:', data);
+    io.to(`user-${data.tutorId}`).emit('new-tutor-request', data);
+  });
 
     // Transaction status changed
     socket.on('booking-status-changed', (data) => {
@@ -57,6 +74,27 @@ const initializeSocket = (server) => {
         changedBy: userId,
         timestamp: new Date()
       });
+    });
+
+        socket.on('notification-created', (data) => {
+      console.log('🔔 Notification created event received:', data);
+      
+      if (!data.userId) {
+        console.error('❌ notification-created received without userId');
+        return;
+      }
+      
+      console.log('📢 Broadcasting new-notification to user:', data.userId);
+      
+      // ✅ Broadcast to the user's room so their Notifications page updates
+      io.to(`user-${data.userId}`).emit('new-notification', {
+        type: data.type,
+        title: data.title,
+        content: data.content,
+        timestamp: data.timestamp
+      });
+      
+      console.log('✅ Notification broadcasted successfully');
     });
 
     // Payment completed

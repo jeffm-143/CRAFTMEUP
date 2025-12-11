@@ -94,6 +94,7 @@ exports.login = async (req, res) => {
         id: user.id,
         email: user.email,
         fullName: user.full_name,
+        name: user.full_name,
         role: user.role,
         course: user.course,
         year: user.year,

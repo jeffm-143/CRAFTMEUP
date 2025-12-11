@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import io from 'socket.io-client';
+import Toast from '../../common/Toast';
 
 import {
   HomeIcon,
@@ -106,6 +107,8 @@ export default function Transaction() {
   const [successMessage, setSuccessMessage] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const socketRef = useRef(null);
+  const [toast, setToast] = useState(null);
+  const hasShownToast = useRef(false);
 
   const role = userData?.role?.toLowerCase() || '';
 
@@ -232,12 +235,23 @@ export default function Transaction() {
   }, [userData?.id]);
 
   // ✅ Show success message if coming from booking
-  useEffect(() => {
-    if (location.state?.refresh) {
-      setSuccessMessage('✅ Service booked successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    }
-  }, [location.state]);
+useEffect(() => {
+  if (location.state?.refresh && !hasShownToast.current) {
+    setToast({
+      message: 'Service booked successfully!',
+      type: 'success',
+      isLoading: false,
+      showProgress: true,
+      duration: 2500,
+    });
+    
+    hasShownToast.current = true;
+    
+    // ✅ Clear the state
+    window.history.replaceState({}, document.title);
+  }
+}, [location.state]);
+
 
   // ✅ Listen for page visibility changes
   useEffect(() => {
@@ -273,9 +287,27 @@ export default function Transaction() {
 
 newSocket.on('booking-created', (data) => {
   console.log('📢 New booking created via socket:', data);
-  // Refresh transactions immediately
+  console.log('📢 Current user ID:', userData?.id);
+  console.log('📢 Tutor/Provider ID:', data.providerId);
+  console.log('📢 LEARNER NAME FROM SOCKET:', data.learnerName);
+  
+  // ✅ If you are the TUTOR/PROVIDER, create and send notification
+  if (userData?.id === data.providerId) {
+    console.log('🔔 I am the tutor - creating notification');
+    console.log('🔔 Passing learnerName:', data.learnerName);
+    
+    createTutorRequestNotification(data.providerId, data.learnerName, data.bookingId)
+      .then(() => {
+        console.log('✅ Notification created and emitted successfully');
+      })
+      .catch(error => {
+        console.error('❌ Error in notification process:', error);
+      });
+  }
+  
+  // ✅ ALWAYS refresh if you are involved (tutor OR learner)
   if (userData?.id === data.userId || userData?.id === data.providerId) {
-    console.log('🔄 Refreshing transactions due to new booking');
+    console.log('🔄 I am involved in this booking - refreshing transactions');
     refreshTransactions();
   }
 });
@@ -286,10 +318,18 @@ newSocket.on('booking-created', (data) => {
       fetchWalletBalance();
     });
 
-    newSocket.on('transaction-status-changed', (data) => {
-      console.log('📢 Transaction status changed:', data);
-      fetchUserBookings();
-    });
+newSocket.on('booking-status-changed', (data) => {
+  console.log('📢 Transaction status changed:', data);
+  
+  // ✅ If you're the learner and booking was rejected, refresh immediately
+  if (userData?.id === data.learnerId && data.status === 'rejected') {
+    console.log('🔄 Your booking was rejected - refreshing transactions');
+    fetchUserBookings();
+  }
+  
+  // ✅ Always refresh for any status change
+  fetchUserBookings();
+});
 
     newSocket.on('payment-confirmed', (data) => {
       console.log('📢 Payment confirmed:', data);
@@ -314,18 +354,41 @@ newSocket.on('booking-created', (data) => {
     };
   }, [userData?.id]);
 
-  const createTutorRequestNotification = async (tutorId, learnerName) => {
-    try {
-      await createNotification({
+const createTutorRequestNotification = async (tutorId, learnerName, bookingId) => {
+  try {
+    console.log('📧 Sending tutor request notification to:', tutorId);
+    console.log('📧 From learner:', learnerName);
+    
+    // ✅ Save to database first
+    const response = await createNotification({
+      bookingId,
+      userId: tutorId,
+      type: 'tutor_request',
+      title: '📋 New Tutor Request',
+      content: `You got a Tutor request from ${learnerName}`
+    });
+    
+    console.log('Tutor request notification saved to DB:', response);
+    
+    // ✅ THEN emit socket event after saving
+    if (socketRef.current && socketRef.current.connected) {
+      console.log('Emitting notification-created socket event');
+      socketRef.current.emit('notification-created', {
+        bookingId,
         userId: tutorId,
         type: 'tutor_request',
-        title: 'New Tutor Request',
-        content: `You got a Tutor request from ${learnerName}`
+        title: '📋 New Tutor Request',
+        content: `You got a Tutor request from ${learnerName}`,
+        timestamp: new Date().toISOString()
       });
-    } catch (error) {
-      console.error('Error creating notification:', error);
     }
-  };
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Error creating tutor request notification:', error);
+    throw error;
+  }
+};
 
   const createRequestAcceptedNotification = async (learnerId, tutorName) => {
     try {
@@ -340,74 +403,58 @@ newSocket.on('booking-created', (data) => {
     }
   };
 
-  const createPaymentConfirmedNotification = async (tutorId, learnerName) => {
-    try {
-      await createNotification({
-        userId: tutorId,
-        type: 'payment_confirmed',
-        title: 'Payment Confirmed',
-        content: `Payment has been confirmed by ${learnerName}`,
-      });
-    } catch (error) {
-      console.error('Error creating notification:', error);
+const fetchUserBookings = async () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (!user?.id) {
+      console.warn('fetchUserBookings: no user in localStorage');
+      return;
     }
-  };
 
-  const fetchUserBookings = async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user'));
-      if (!user?.id) {
-        console.warn('fetchUserBookings: no user in localStorage');
-        return;
+    const response = await getUserBookings(user.id);
+    const data = response?.data ?? response;
+    const bookings = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+
+    console.log('Bookings fetched:', bookings);
+
+    const ongoing = [];
+    const pending = [];
+    const completed = [];
+
+    bookings.forEach(booking => {
+      const status = (booking.status || '').toLowerCase();
+
+
+      switch (status) {
+        case 'ongoing':
+        case 'ready':
+          ongoing.push(booking);
+          break;
+        case 'pending':
+          pending.push(booking);
+          break;
+        case 'completed':
+          completed.push(booking);
+          break;
+        default:
+          console.debug('Unknown booking status:', booking);
       }
+    });
 
-      const response = await getUserBookings(user.id);
-      const data = response?.data ?? response;
-      const bookings = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-
-      console.log('✅ Bookings fetched:', bookings);
-
-      const ongoing = [];
-      const pending = [];
-      const completed = [];
-
-      bookings.forEach(booking => {
-        const status = (booking.status || '').toLowerCase();
-
-        if (status === 'pending' && booking.is_provider) {
-          createTutorRequestNotification(booking.provider_id, booking.requester_name);
-        }
-
-        switch (status) {
-          case 'ongoing':
-          case 'ready':
-            ongoing.push(booking);
-            break;
-          case 'pending':
-            pending.push(booking);
-            break;
-          case 'completed':
-            completed.push(booking);
-            break;
-          default:
-            console.debug('Unknown booking status:', booking);
-        }
-      });
-
-      setOngoingBookings(ongoing);
-      setPendingBookings(pending);
-      setCompletedBookings(completed);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-    }
-  };
+    setOngoingBookings(ongoing);
+    setPendingBookings(pending);
+    setCompletedBookings(completed);
+  } catch (error) {
+    console.error('Error fetching bookings:', error);
+  }
+};
 
   const fetchWalletBalance = async () => {
     try {
       const user = JSON.parse(localStorage.getItem('user'));
       const response = await getWalletBalance(user.id);
       setUserWallet(response.data.balance);
-      console.log('✅ Wallet balance fetched:', response.data.balance);
+      console.log('Wallet balance fetched:', response.data.balance);
     } catch (error) {
       console.error('Error fetching wallet balance:', error);
     }
@@ -425,70 +472,151 @@ newSocket.on('booking-created', (data) => {
         });
       }
       
-      await fetchUserBookings();
-      alert('✅ Service marked as ready for completion');
-    } catch (error) {
-      console.error('Error marking service as ready:', error);
-      alert('❌ Failed to update service status');
-    }
-  };
+    await fetchUserBookings();
+    // ✅ TOAST NOTIFICATION
+    setToast({
+      message: 'Service marked as ready for completion',
+      type: 'success',
+      isLoading: false,
+      showProgress: true,
+      duration: 2500,
+    });
+  } catch (error) {
+    console.error('Error marking service as ready:', error);
+    // ✅ TOAST NOTIFICATION
+    setToast({
+      message: '❌ Failed to update service status. Please try again.',
+      type: 'error',
+      isLoading: false,
+      showProgress: false,
+      duration: 3000,
+    });
+  }
+};
 
   const handleConfirmCompletion = (booking) => {
     setSelectedBooking(booking);
     setShowConfirmModal(true);
   };
 
-  const handlePaymentConfirm = async () => {
+const handlePaymentConfirm = async () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    
+    if (selectedBooking.is_provider) {
+      // ✅ TOAST NOTIFICATION
+      setToast({
+        message: '❌ Error: Only learners can confirm payment for services',
+        type: 'error',
+        isLoading: false,
+        showProgress: false,
+        duration: 3000,
+      });
+      return;
+    }
+
+    const fromUserId = user.id;
+    const toUserId = selectedBooking.provider_id || selectedBooking.user_id;
+
+    const paymentData = {
+      fromUserId: parseInt(fromUserId),
+      toUserId: parseInt(toUserId),
+      amount: parseFloat(selectedBooking.price),
+      bookingId: parseInt(selectedBooking.id)
+    };
+
+    console.log('💰 Processing payment:', paymentData);
+
+    // ✅ SHOW LOADING TOAST
+    setToast({
+      message: '💳 Processing your payment...',
+      type: 'info',
+      isLoading: true,
+      showProgress: false,
+      duration: 0,
+    });
+    
+    // ✅ TRANSFER FUNDS FIRST
+    await transferFunds(paymentData);
+    
+    // ✅ SEND NOTIFICATION TO TUTOR (PAYMENT RECEIVED)
     try {
-      const user = JSON.parse(localStorage.getItem('user'));
+      console.log('📧 Sending notification to tutor:', toUserId);
+      console.log('📧 Learner name:', user.full_name);
       
-      await createPaymentConfirmedNotification(
-        selectedBooking.provider_id, 
-        userData.full_name
-      );
-      
-      if (selectedBooking.is_provider) {
-        alert('❌ Error: Providers cannot confirm payment');
-        return;
-      }
+      await createNotification({
+        userId: toUserId,
+        type: 'payment_confirmed',
+        title: '💰 Payment Received',
+        content: `Payment of SC ${selectedBooking.price} has been confirmed by ${user.full_name} for "${selectedBooking.service_title}"`
+      });
+      console.log('Tutor notification sent successfully');
+    } catch (tutorNotifError) {
+      console.warn('⚠️ Failed to send tutor notification (non-critical):', tutorNotifError);
+    }
 
-      const fromUserId = user.id;
-      const toUserId = selectedBooking.provider_id || selectedBooking.user_id;
+    // ✅ SEND NOTIFICATION TO LEARNER (PAYMENT SENT)
+    try {
+      console.log('📧 Sending notification to learner:', fromUserId);
+      console.log('📧 Tutor name:', selectedBooking.provider_name);
+      
+      await createNotification({
+        userId: fromUserId,
+        type: 'payment_confirmed',
+        title: 'Payment Confirmed',
+        content: `Your payment of SC ${selectedBooking.price} has been sent to ${selectedBooking.provider_name} for "${selectedBooking.service_title}"`
+      });
+      console.log('Learner notification sent successfully');
+    } catch (learnerNotifError) {
+      console.warn('⚠️ Failed to send learner notification (non-critical):', learnerNotifError);
+    }
+    
+    if (socketRef.current) {
+      socketRef.current.emit('payment-completed', {
+        bookingId: selectedBooking.id,
+        fromUserId,
+        toUserId,
+        amount: selectedBooking.price
+      });
+    }
+    
+    await fetchWalletBalance();
+    await fetchUserBookings();
+    
+    setShowConfirmModal(false);
+    setSelectedBooking(null);
 
-      const paymentData = {
-        fromUserId: parseInt(fromUserId),
-        toUserId: parseInt(toUserId),
-        amount: parseFloat(selectedBooking.price),
-        bookingId: parseInt(selectedBooking.id)
-      };
-
-      await transferFunds(paymentData);
-      
-      if (socketRef.current) {
-        socketRef.current.emit('payment-completed', {
-          bookingId: selectedBooking.id,
-          fromUserId,
-          toUserId,
-          amount: selectedBooking.price
-        });
-      }
-      
-      await fetchWalletBalance();
-      await fetchUserBookings();
-      
-      setShowConfirmModal(false);
-      
+    // ✅ SUCCESS TOAST
+    setToast({
+      message: 'Payment confirmed successfully!',
+      type: 'success',
+      isLoading: false,
+      showProgress: true,
+      duration: 2500,
+    });
+    
+    setTimeout(() => {
       navigate('/feedback', { 
         state: { 
           booking: selectedBooking 
         }
       });
-    } catch (error) {
-      console.error('Payment error details:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to process payment. Please try again.';
-      alert('❌ ' + errorMessage);
-    }
-  };
+    }, 1500);
+
+  } catch (error) {
+    console.error('❌ Payment error details:', error);
+    console.error('❌ Error response:', error.response?.data);
+    
+    const errorMessage = error.response?.data?.message || 'Failed to process payment. Please try again.';
+      setToast({
+      message: '❌ Payment Failed\n' + errorMessage,
+      type: 'error',
+      isLoading: false,
+      showProgress: false,
+      duration: 3500,
+    });
+  }
+};
 
   const handleAcceptBooking = async (bookingId) => {
     try {
@@ -504,33 +632,80 @@ newSocket.on('booking-created', (data) => {
         });
       }
       
-      await fetchUserBookings();
-      alert('✅ Booking accepted successfully');
-    } catch (error) {
-      console.error('Error accepting booking:', error);
-      alert('❌ Failed to accept booking');
-    }
-  };
+    await fetchUserBookings();
+    // ✅ TOAST NOTIFICATION
+    setToast({
+      message: 'Booking accepted successfully!',
+      type: 'success',
+      isLoading: false,
+      showProgress: true,
+      duration: 2500,
+    });
+  } catch (error) {
+    console.error('Error accepting booking:', error);
+    // ✅ TOAST NOTIFICATION
+    setToast({
+      message: '❌ Unable to accept booking. Please try again.',
+      type: 'error',
+      isLoading: false,
+      showProgress: false,
+      duration: 3000,
+    });
+  }
+};
 
-  const handleRejectBooking = async (bookingId) => {
-    try {
-      await updateTransactionStatus(bookingId, 'rejected');
-      
-      if (socketRef.current) {
-        socketRef.current.emit('booking-status-changed', {
-          bookingId,
-          status: 'rejected',
-          userId: userData.id
+const handleRejectBooking = async (bookingId) => {
+  try {
+    await updateTransactionStatus(bookingId, 'rejected');
+    
+    // ✅ Find the booking details to get learner info
+    const booking = pendingBookings.find(b => b.id === bookingId);
+    
+    // ✅ Send rejection notification to learner
+    if (booking) {
+      try {
+        await createNotification({
+          userId: booking.user_id, // learner's ID
+          type: 'booking_rejected',
+          title: '❌ Booking Rejected',
+          content: `Your booking request for "${booking.service_title}" has been rejected by ${userData.full_name || 'the tutor'}`
         });
+        console.log('✅ Rejection notification sent to learner');
+      } catch (notifError) {
+        console.warn('⚠️ Failed to send rejection notification:', notifError);
       }
-      
-      await fetchUserBookings();
-      alert('✅ Booking rejected');
-    } catch (error) {
-      console.error('Error rejecting booking:', error);
-      alert('❌ Failed to reject booking');
     }
-  };
+    
+    if (socketRef.current) {
+      socketRef.current.emit('booking-status-changed', {
+        bookingId,
+        status: 'rejected',
+        userId: userData.id,
+        learnerId: booking?.user_id, // ✅ Add this for real-time refresh
+      });
+    }
+    
+    // ✅ Refresh immediately without page reload
+    await fetchUserBookings();
+    
+    setToast({
+      message: 'Booking rejected successfully!',
+      type: 'success',
+      isLoading: false,
+      showProgress: true,
+      duration: 2500,
+    });
+  } catch (error) {
+    console.error('Error rejecting booking:', error);
+    setToast({
+      message: '❌ Unable to reject booking. Please try again.',
+      type: 'error',
+      isLoading: false,
+      showProgress: false,
+      duration: 3000,
+    });
+  }
+};
 
   const getStatusColor = (status) => {
     const colors = {
@@ -834,6 +1009,7 @@ newSocket.on('booking-created', (data) => {
             setShowConfirmModal(false);
             setSelectedBooking(null);
           }}
+          
         />
       )}
 
@@ -859,6 +1035,16 @@ newSocket.on('booking-created', (data) => {
           </div>
         </div>
       )}
+          {toast && (
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(null)}
+        isLoading={toast.isLoading}
+        showProgress={toast.showProgress}
+        duration={toast.duration}
+      />
+    )}
     </div>
   );
 }

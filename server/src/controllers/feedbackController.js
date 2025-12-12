@@ -37,6 +37,19 @@ exports.createFeedback = async (req, res) => {
             );
 
             console.log(`✅ Notification created for tutor ${tutor_id} about feedback from ${learner_name}`);
+            // Emit real-time notification to tutor if socket is initialized
+            try {
+              const { getIO } = require('../config/socket');
+              const io = getIO();
+              io.to(`user-${tutor_id}`).emit('new-notification', {
+                type: 'feedback_received',
+                title: 'New Feedback Received',
+                content: notificationContent,
+                timestamp: new Date()
+              });
+            } catch (emitErr) {
+              console.warn('Socket emit for feedback notification failed:', emitErr.message || emitErr);
+            }
         }
 
         res.status(201).json({

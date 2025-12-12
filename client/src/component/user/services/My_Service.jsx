@@ -25,6 +25,7 @@ import {
   updateService,
   deleteService,
   getNotifications,
+  getWalletBalance,
 } from "../../../services/api";
 import Toast from "../../common/Toast";
 
@@ -80,6 +81,7 @@ export default function MyServices() {
   const [toast, setToast] = useState(null);
   const [userData, setUserData] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(null);
   const [newService, setNewService] = useState({
     title: "",
     description: "",
@@ -174,6 +176,26 @@ export default function MyServices() {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
   }, []);
+
+  // Fetch wallet balance when the modal opens (if tutor/both)
+  useEffect(() => {
+    const loadBalance = async () => {
+      try {
+        const storedUser = JSON.parse(localStorage.getItem('user'));
+        if (!storedUser || !storedUser.id) return;
+        const role = (storedUser.role || '').toLowerCase();
+        if (showServiceModal && (role === 'tutor' || role === 'both')) {
+          const resp = await getWalletBalance(storedUser.id);
+          // api.getWalletBalance returns the axios response
+          setWalletBalance(resp?.data?.balance ?? null);
+        }
+      } catch (err) {
+        console.error('Error fetching wallet balance:', err);
+      }
+    };
+
+    loadBalance();
+  }, [showServiceModal]);
 
   // Fetch unread notifications count
   useEffect(() => {
@@ -416,6 +438,11 @@ const fetchUserServices = async () => {
             <h2 className="text-lg sm:text-xl font-semibold">
               {editingService ? "Edit Service" : "Add New Service"}
             </h2>
+            {(!editingService && (role === 'tutor' || role === 'both')) && (
+              <div className="text-sm text-white/90 mr-3">
+                Balance: <span className="font-semibold">SC {walletBalance !== null ? walletBalance : '—'}</span>
+              </div>
+            )}
             <button
               onClick={() => {
                 setShowServiceModal(false);
@@ -439,6 +466,15 @@ const fetchUserServices = async () => {
             </button>
           </div>
         </div>
+
+        {/* Fee note for tutors */}
+        {(!editingService && (role === 'tutor' || role === 'both')) && (
+          <div className="max-w-2xl mx-auto w-full px-4 py-3 sm:py-4">
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
+              Note: Adding a new service charges a SkillCoin fee of <span className="font-semibold">10 SC</span>. The fee will be deducted from your wallet automatically.
+            </div>
+          </div>
+        )}
 
         {/* Form Content */}
         <div className="flex-1 overflow-y-auto">

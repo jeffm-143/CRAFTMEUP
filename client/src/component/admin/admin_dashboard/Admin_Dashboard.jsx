@@ -13,12 +13,18 @@ import api, {
   disconnectAdmin
 } from '../../../services/adminApi';
 import AdminSidebar from "../../AdminSidebar";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
+import { Pie, Bar } from 'react-chartjs-2';
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 const Admin_Dashboard = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [detailsModal, setDetailsModal] = useState(false);
   const [stats, setStats] = useState(null);
@@ -34,6 +40,70 @@ const Admin_Dashboard = () => {
     minor: ['spam', 'rude_message', 'irrelevant_post'],
     serious: ['harassment', 'scamming', 'fake_credentials', 'offensive_behavior'],
     abuse: ['fake_account', 'coin_misuse', 'credit_abuse']
+  };
+
+  // --- Chart helpers (derive chart data from `stats`) ---
+  const getActivityChartData = () => {
+    const labels = stats?.activitiesByType?.map(a => a.activity_type) || [];
+    const counts = stats?.activitiesByType?.map(a => parseInt(a.count) || 0) || [];
+    const pending = stats?.activitiesByType?.map(a => parseInt(a.pendingCount) || 0) || [];
+    return { labels, counts, pending };
+  };
+
+  const chartColors = [
+    '#3b82f6', // blue
+    '#10b981', // green
+    '#f59e0b', // amber
+    '#ef4444', // red
+    '#8b5cf6', // purple
+    '#06b6d4', // teal
+    '#f97316'  // orange
+  ];
+
+  const buildPieData = () => {
+    const { labels, counts } = getActivityChartData();
+    return {
+      labels,
+      datasets: [
+        {
+          data: counts,
+          backgroundColor: labels.map((_, i) => chartColors[i % chartColors.length]),
+          hoverOffset: 6
+        }
+      ]
+    };
+  };
+
+  const buildBarData = () => {
+    const { labels, counts, pending } = getActivityChartData();
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Pending',
+          data: pending,
+          backgroundColor: 'rgba(251,191,36,0.9)'
+        },
+        {
+          label: 'Total',
+          data: counts,
+          backgroundColor: 'rgba(59,130,246,0.85)'
+        }
+      ]
+    };
+  };
+
+  const pieOptions = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom' }
+    }
+  };
+
+  const barOptions = {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: { x: { ticks: { maxRotation: 25, minRotation: 0 } }, y: { beginAtZero: true } }
   };
 
   // Initialize Socket on mount
@@ -86,7 +156,7 @@ const Admin_Dashboard = () => {
   useEffect(() => {
     fetchActivities();
     fetchStats();
-  }, [currentPage, filterType, searchQuery]);
+  }, [currentPage, filterType, searchQuery, dateFrom, dateTo]);
 
   const handlePageChange = (newPage) => {
     if (contentRef.current) {
@@ -109,7 +179,9 @@ const Admin_Dashboard = () => {
           page: currentPage,
           limit: 10,
           filterType: filterType,
-          search: searchQuery
+          search: searchQuery,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined
         }
       });
       setActivities(response.data.data || []);
@@ -424,33 +496,33 @@ const handleWalletRequestUpdate = async (newStatus) => {
       <AdminSidebar />
 
       <div className="flex-1 overflow-hidden">
-      {/* Header */}
-      <div className="bg-white border-b shadow-sm">
-        <div className="flex items-center justify-between px-8 py-6">
-          <div className="flex items-center gap-4">
-            <div>
-              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-                Admin Dashboard
-              </h2>
-              <p className="text-sm text-gray-500 mt-2">
-                Manage and monitor platform activities
-              </p>
-            </div>
-
-            {refreshing && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                Updating...
+        {/* Header */}
+        <div className="bg-white border-b shadow-sm">
+          <div className="flex items-center justify-between px-8 py-6">
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
+                  Admin Dashboard
+                </h2>
+                <p className="text-sm text-gray-500 mt-2">
+                  Manage and monitor platform activities
+                </p>
               </div>
-            )}
+
+              {refreshing && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                  Updating...
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
         {/* Content Area */}
         <div ref={contentRef} className="p-8 overflow-y-auto h-[calc(100vh-5rem)]">
-        {/* Stats Cards */}
-        {stats && (
+          {/* Stats Cards */}
+          {stats && (
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-8">
               <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
                 <div className="flex items-center justify-between">
@@ -466,111 +538,157 @@ const handleWalletRequestUpdate = async (newStatus) => {
               </div>
           
               <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow border-l-4 border-yellow-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-xs font-semibold">Pending Activities</p>
-                  <p className="text-2xl font-bold text-yellow-600 mt-1">
-                    {stats.activitiesByType?.reduce((total, activity) => {
-                      const pending = parseInt(activity.pendingCount) || 0;
-                      return total + pending;
-                    }, 0) || 0}
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-xs font-semibold">Pending Activities</p>
+                    <p className="text-2xl font-bold text-yellow-600 mt-1">
+                      {stats.activitiesByType?.reduce((total, activity) => {
+                        const pending = parseInt(activity.pendingCount) || 0;
+                        return total + pending;
+                      }, 0) || 0}
+                    </p>
+                  </div>
+                  <div className="text-xl">⏳</div>
                 </div>
-                <div className="text-xl">⏳</div>
               </div>
-            </div>
 
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-xs font-semibold">Services</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">
-                    {stats.activitiesByType?.find(a => a.activity_type === 'Service Created')?.count || 0}
-                  </p>
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-xs font-semibold">Services</p>
+                    <p className="text-2xl font-bold text-blue-600 mt-1">
+                      {stats.activitiesByType?.find(a => a.activity_type === 'Service Created')?.count || 0}
+                    </p>
+                  </div>
+                  <FaCheck className="text-blue-500 text-xl" />
                 </div>
-                <FaCheck className="text-blue-500 text-xl" />
               </div>
-            </div>
 
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-xs font-semibold">Transactions</p>
-                  <p className="text-2xl font-bold text-green-600 mt-1">
-                    {stats.activitiesByType?.find(a => a.activity_type === 'Transaction')?.count || 0}
-                  </p>
-                  <p className="text-xs text-yellow-600 mt-1">
-                    {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'Transaction')?.pendingCount) || 0} pending
-                  </p>
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-xs font-semibold">Transactions</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">
+                      {stats.activitiesByType?.find(a => a.activity_type === 'Transaction')?.count || 0}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'Transaction')?.pendingCount) || 0} pending
+                    </p>
+                  </div>
+                  <FaExchangeAlt className="text-green-500 text-xl" />
                 </div>
-                <FaExchangeAlt className="text-green-500 text-xl" />
               </div>
-            </div>
 
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-xs font-semibold">Wallet Req.</p>
-                  <p className="text-2xl font-bold text-yellow-600 mt-1">
-                    {stats.activitiesByType?.find(a => a.activity_type === 'Wallet Request')?.count || 0}
-                  </p>
-                  <p className="text-xs text-yellow-600 mt-1">
-                    {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'Wallet Request')?.pendingCount) || 0} pending
-                  </p>
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-xs font-semibold">Wallet Req.</p>
+                    <p className="text-2xl font-bold text-yellow-600 mt-1">
+                      {stats.activitiesByType?.find(a => a.activity_type === 'Wallet Request')?.count || 0}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'Wallet Request')?.pendingCount) || 0} pending
+                    </p>
+                  </div>
+                  <FaWallet className="text-yellow-500 text-xl" />
                 </div>
-                <FaWallet className="text-yellow-500 text-xl" />
               </div>
-            </div>
 
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-xs font-semibold">Reports</p>
-                  <p className="text-2xl font-bold text-red-600 mt-1">
-                    {stats.activitiesByType?.find(a => a.activity_type === 'Report Submitted')?.count || 0}
-                  </p>
-                  <p className="text-xs text-yellow-600 mt-1">
-                    {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'Report Submitted')?.pendingCount) || 0} pending
-                  </p>
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-xs font-semibold">Reports</p>
+                    <p className="text-2xl font-bold text-red-600 mt-1">
+                      {stats.activitiesByType?.find(a => a.activity_type === 'Report Submitted')?.count || 0}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'Report Submitted')?.pendingCount) || 0} pending
+                    </p>
+                  </div>
+                  <FaFileAlt className="text-red-500 text-xl" />
                 </div>
-                <FaFileAlt className="text-red-500 text-xl" />
               </div>
-            </div>
 
-            <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-xs font-semibold">Users</p>
-                  <p className="text-2xl font-bold text-purple-600 mt-1">
-                    {stats.activitiesByType?.find(a => a.activity_type === 'User Registered')?.count || 0}
-                  </p>
-                  <p className="text-xs text-yellow-600 mt-1">
-                    {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'User Registered')?.pendingCount) || 0} pending
-                  </p>
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-xs font-semibold">Users</p>
+                    <p className="text-2xl font-bold text-purple-600 mt-1">
+                      {stats.activitiesByType?.find(a => a.activity_type === 'User Registered')?.count || 0}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      {parseInt(stats.activitiesByType?.find(a => a.activity_type === 'User Registered')?.pendingCount) || 0} pending
+                    </p>
+                  </div>
+                  <FaUserPlus className="text-purple-500 text-xl" />
                 </div>
-                <FaUserPlus className="text-purple-500 text-xl" />
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Charts (Pie + Bar) */}
+          {stats && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <h4 className="text-sm font-semibold text-gray-600 mb-3">Activity Distribution</h4>
+                <div className="w-full h-56">
+                  <Pie data={buildPieData()} options={pieOptions} />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
+                <h4 className="text-sm font-semibold text-gray-600 mb-3">Pending vs Total</h4>
+                <div className="w-full h-56">
+                  <Bar data={buildBarData()} options={barOptions} />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Filter and Search */}
           <div className="mb-6 flex gap-4 items-center flex-wrap">
-            <select
-              value={filterType}
-              onChange={(e) => {
-                setFilterType(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-            >
-              <option value="all">All Activities</option>
-              <option value="Service Created">Service Created</option>
-              <option value="Transaction">Transaction</option>
-              <option value="Wallet Request">Wallet Request</option>
-              <option value="Report Submitted">Report Submitted</option>
-              <option value="User Registered">User Registered</option>
-            </select>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm"
+                  aria-label="From date"
+                />
+                <span className="text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm"
+                  aria-label="To date"
+                />
+                <button
+                  onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
+                  className="ml-2 px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200"
+                  title="Clear dates"
+                >
+                  Clear
+                </button>
+              </div>
+
+              <select
+                value={filterType}
+                onChange={(e) => {
+                  setFilterType(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+              >
+                <option value="all">All Activities</option>
+                <option value="Service Created">Service Created</option>
+                <option value="Transaction">Transaction</option>
+                <option value="Wallet Request">Wallet Request</option>
+                <option value="Report Submitted">Report Submitted</option>
+                <option value="User Registered">User Registered</option>
+              </select>
+            </div>
 
             <div className="relative flex-1 max-w-md">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1117,93 +1235,93 @@ const handleWalletRequestUpdate = async (newStatus) => {
                     </>
                   )}
 
-                {/* ✅ USER REGISTERED DETAILS */}
-                {selectedActivity.activity_type === 'User Registered' && (
-                  <>
-                    <div className="mb-8">
-                      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <div className="w-1 h-6 bg-purple-600 rounded"></div>
-                        User Information
-                      </h3>
-                      <div className="grid grid-cols-1 gap-4">
-                        {renderDetailCard(<FaUser className="text-purple-600" />, 'Full Name', selectedActivity.full_name, true)}
-                        {renderDetailCard(<FaEnvelope className="text-purple-600" />, 'Email', selectedActivity.email, true)}
-                        {renderDetailCard(<FaBriefcase className="text-purple-600" />, 'Role', selectedActivity.role, true, true)}
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <div className="w-1 h-6 bg-purple-600 rounded"></div>
-                        Academic Information
-                      </h3>
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          {renderDetailCard(<FaTag className="text-purple-600" />, 'Course', selectedActivity.course, true)}
-                          {renderDetailCard(<FaTag className="text-purple-600" />, 'Year Level', selectedActivity.year, true)}
-                        </div>
-                        <div className="grid grid-cols-1 gap-4">
-                          {renderDetailCard(<FaClock className="text-purple-600" />, 'Joined', formatDateTime(selectedActivity.created_at), true)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ✅ SINGLE VERIFICATION STATUS SECTION - DISPLAYS ONLY WHEN NOT PENDING */}
-                    {selectedActivity.verification_status && selectedActivity.verification_status !== 'pending' && (
-                      <div className={`mb-8 p-6 rounded-xl border-2 ${
-                        selectedActivity.verification_status === 'approved' 
-                          ? 'bg-green-50 border-green-200' 
-                          : 'bg-red-50 border-red-200'
-                      }`}>
-                        <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-                          <div className={`w-1 h-6 rounded ${selectedActivity.verification_status === 'approved' ? 'bg-green-600' : 'bg-red-600'}`}></div>
-                          <span className={selectedActivity.verification_status === 'approved' ? 'text-green-900' : 'text-red-900'}>
-                            Verification Status
-                          </span>
+                  {/* ✅ USER REGISTERED DETAILS */}
+                  {selectedActivity.activity_type === 'User Registered' && (
+                    <>
+                      <div className="mb-8">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                          <div className="w-1 h-6 bg-purple-600 rounded"></div>
+                          User Information
                         </h3>
-                        <p className={`text-sm font-semibold ${
-                          selectedActivity.verification_status === 'approved' 
-                            ? 'text-green-700' 
-                            : 'text-red-700'
-                        }`}>
-                          Status: <span className="capitalize">{selectedActivity.verification_status}</span>
-                        </p>
+                        <div className="grid grid-cols-1 gap-4">
+                          {renderDetailCard(<FaUser className="text-purple-600" />, 'Full Name', selectedActivity.full_name, true)}
+                          {renderDetailCard(<FaEnvelope className="text-purple-600" />, 'Email', selectedActivity.email, true)}
+                          {renderDetailCard(<FaBriefcase className="text-purple-600" />, 'Role', selectedActivity.role, true, true)}
+                        </div>
                       </div>
-                    )}
 
-                    {/* ✅ USER VERIFICATION ACTION BUTTONS - Only show when pending */}
-                    {selectedActivity.verification_status && selectedActivity.verification_status === 'pending' && (
-                      <>
-                        <div className="mb-8 p-6 rounded-xl bg-yellow-50 border-2 border-yellow-200">
-                          <h3 className="text-lg font-bold text-yellow-900 mb-4 flex items-center gap-2">
-                            <div className="w-1 h-6 bg-yellow-600 rounded"></div>
-                            Pending Verification
+                      <div className="mb-8">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                          <div className="w-1 h-6 bg-purple-600 rounded"></div>
+                          Academic Information
+                        </h3>
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            {renderDetailCard(<FaTag className="text-purple-600" />, 'Course', selectedActivity.course, true)}
+                            {renderDetailCard(<FaTag className="text-purple-600" />, 'Year Level', selectedActivity.year, true)}
+                          </div>
+                          <div className="grid grid-cols-1 gap-4">
+                            {renderDetailCard(<FaClock className="text-purple-600" />, 'Joined', formatDateTime(selectedActivity.created_at), true)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ✅ SINGLE VERIFICATION STATUS SECTION - DISPLAYS ONLY WHEN NOT PENDING */}
+                      {selectedActivity.verification_status && selectedActivity.verification_status !== 'pending' && (
+                        <div className={`mb-8 p-6 rounded-xl border-2 ${
+                          selectedActivity.verification_status === 'approved' 
+                            ? 'bg-green-50 border-green-200' 
+                            : 'bg-red-50 border-red-200'
+                        }`}>
+                          <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+                            <div className={`w-1 h-6 rounded ${selectedActivity.verification_status === 'approved' ? 'bg-green-600' : 'bg-red-600'}`}></div>
+                            <span className={selectedActivity.verification_status === 'approved' ? 'text-green-900' : 'text-red-900'}>
+                              Verification Status
+                            </span>
                           </h3>
-                          <p className="text-sm text-yellow-700 mb-6">
-                            This user account is awaiting admin verification. Review the information and approve or reject the registration.
+                          <p className={`text-sm font-semibold ${
+                            selectedActivity.verification_status === 'approved' 
+                              ? 'text-green-700' 
+                              : 'text-red-700'
+                          }`}>
+                            Status: <span className="capitalize">{selectedActivity.verification_status}</span>
                           </p>
                         </div>
+                      )}
 
-                        <div className="flex gap-4 mt-6 pt-6 border-t border-gray-200">
-                          <button
-                            onClick={() => handleUserVerification(selectedActivity.id, 'approved')}
-                            className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center space-x-2"
-                          >
-                            <FaCheck className="text-lg" />
-                            <span>Approve</span>
-                          </button>
-                          <button
-                            onClick={() => handleUserVerification(selectedActivity.id, 'rejected')}
-                            className="flex-1 bg-red-500 text-white py-3 rounded-lg hover:bg-red-600 transition-colors font-medium flex items-center justify-center space-x-2"
-                          >
-                            <FaTimes className="text-lg" />
-                            <span>Reject</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
+                      {/* ✅ USER VERIFICATION ACTION BUTTONS - Only show when pending */}
+                      {selectedActivity.verification_status && selectedActivity.verification_status === 'pending' && (
+                        <>
+                          <div className="mb-8 p-6 rounded-xl bg-yellow-50 border-2 border-yellow-200">
+                            <h3 className="text-lg font-bold text-yellow-900 mb-4 flex items-center gap-2">
+                              <div className="w-1 h-6 bg-yellow-600 rounded"></div>
+                              Pending Verification
+                            </h3>
+                            <p className="text-sm text-yellow-700 mb-6">
+                              This user account is awaiting admin verification. Review the information and approve or reject the registration.
+                            </p>
+                          </div>
+
+                          <div className="flex gap-4 mt-6 pt-6 border-t border-gray-200">
+                            <button
+                              onClick={() => handleUserVerification(selectedActivity.id, 'approved')}
+                              className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center space-x-2"
+                            >
+                              <FaCheck className="text-lg" />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              onClick={() => handleUserVerification(selectedActivity.id, 'rejected')}
+                              className="flex-1 bg-red-500 text-white py-3 rounded-lg hover:bg-red-600 transition-colors font-medium flex items-center justify-center space-x-2"
+                            >
+                              <FaTimes className="text-lg" />
+                              <span>Reject</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
 
                   {/* Timestamp */}
                   <div className="pt-6 border-t border-gray-200 flex items-center justify-between">
@@ -1271,6 +1389,6 @@ const handleWalletRequestUpdate = async (newStatus) => {
       `}</style>
     </div>
   );
-};
+}
 
 export default Admin_Dashboard;

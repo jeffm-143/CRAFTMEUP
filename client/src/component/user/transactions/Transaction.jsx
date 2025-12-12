@@ -290,25 +290,23 @@ newSocket.on('booking-created', (data) => {
   console.log('📢 Current user ID:', userData?.id);
   console.log('📢 Tutor/Provider ID:', data.providerId);
   console.log('📢 LEARNER NAME FROM SOCKET:', data.learnerName);
-  
-  // ✅ If you are the TUTOR/PROVIDER, create and send notification
-  if (userData?.id === data.providerId) {
-    console.log('🔔 I am the tutor - creating notification');
-    console.log('🔔 Passing learnerName:', data.learnerName);
-    
-    createTutorRequestNotification(data.providerId, data.learnerName, data.bookingId)
-      .then(() => {
-        console.log('✅ Notification created and emitted successfully');
-      })
-      .catch(error => {
-        console.error('❌ Error in notification process:', error);
-      });
-  }
-  
-  // ✅ ALWAYS refresh if you are involved (tutor OR learner)
+
+  // Server now creates and emits the stored notification. Do NOT create
+  // a duplicate notification from the client — only refresh transactions.
   if (userData?.id === data.userId || userData?.id === data.providerId) {
     console.log('🔄 I am involved in this booking - refreshing transactions');
     refreshTransactions();
+  }
+  // Also refresh notifications badge in case a notification row was added
+  try {
+    if (userData?.id) {
+      getNotifications(userData.id).then(notifs => {
+        const unread = (notifs || []).filter(n => !n.read).length;
+        setUnreadCount(unread);
+      }).catch(err => console.error('Error fetching notifications after booking-created:', err));
+    }
+  } catch (err) {
+    console.error('Error refreshing notifications after booking-created:', err);
   }
 });
 
@@ -316,6 +314,13 @@ newSocket.on('booking-created', (data) => {
       console.log('📢 Booking updated:', data);
       fetchUserBookings();
       fetchWalletBalance();
+      // Some booking updates create notifications; refresh badge
+      if (userData?.id) {
+        getNotifications(userData.id).then(notifs => {
+          const unread = (notifs || []).filter(n => !n.read).length;
+          setUnreadCount(unread);
+        }).catch(err => console.error('Error fetching notifications after booking-updated:', err));
+      }
     });
 
 newSocket.on('booking-status-changed', (data) => {
@@ -329,17 +334,65 @@ newSocket.on('booking-status-changed', (data) => {
   
   // ✅ Always refresh for any status change
   fetchUserBookings();
+  // Refresh notification badge too
+  if (userData?.id) {
+    getNotifications(userData.id).then(notifs => {
+      const unread = (notifs || []).filter(n => !n.read).length;
+      setUnreadCount(unread);
+    }).catch(err => console.error('Error fetching notifications after booking-status-changed:', err));
+  }
 });
 
     newSocket.on('payment-confirmed', (data) => {
       console.log('📢 Payment confirmed:', data);
       fetchUserBookings();
       fetchWalletBalance();
+      // Payment may generate notifications; refresh badge
+      if (userData?.id) {
+        getNotifications(userData.id).then(notifs => {
+          const unread = (notifs || []).filter(n => !n.read).length;
+          setUnreadCount(unread);
+        }).catch(err => console.error('Error fetching notifications after payment-confirmed:', err));
+      }
     });
 
     newSocket.on('wallet-updated', (data) => {
       console.log('📢 Wallet updated:', data);
       fetchWalletBalance();
+    });
+
+    // Listen for new notifications and refresh unread count
+    newSocket.on('new-notification', (notification) => {
+      try {
+        console.log('🔔 Received new-notification via socket:', notification);
+        if (userData?.id) {
+          getNotifications(userData.id)
+            .then(notifs => {
+              const unread = (notifs || []).filter(n => !n.read).length;
+              setUnreadCount(unread);
+            })
+            .catch(err => console.error('Error fetching notifications after socket event:', err));
+        }
+      } catch (err) {
+        console.error('Error handling new-notification socket event:', err);
+      }
+    });
+
+    // Also refresh when notifications are updated (marked read) elsewhere
+    newSocket.on('notification-updated', (payload) => {
+      try {
+        console.log('🔁 Transaction received notification-updated:', payload);
+        if (userData?.id) {
+          getNotifications(userData.id)
+            .then(notifs => {
+              const unread = (notifs || []).filter(n => !n.read).length;
+              setUnreadCount(unread);
+            })
+            .catch(err => console.error('Error fetching notifications after notification-updated:', err));
+        }
+      } catch (err) {
+        console.error('Error handling notification-updated in Transaction.jsx:', err);
+      }
     });
 
     newSocket.on('disconnect', () => {
@@ -354,41 +407,9 @@ newSocket.on('booking-status-changed', (data) => {
     };
   }, [userData?.id]);
 
-const createTutorRequestNotification = async (tutorId, learnerName, bookingId) => {
-  try {
-    console.log('📧 Sending tutor request notification to:', tutorId);
-    console.log('📧 From learner:', learnerName);
-    
-    // ✅ Save to database first
-    const response = await createNotification({
-      bookingId,
-      userId: tutorId,
-      type: 'tutor_request',
-      title: '📋 New Tutor Request',
-      content: `You got a Tutor request from ${learnerName}`
-    });
-    
-    console.log('Tutor request notification saved to DB:', response);
-    
-    // ✅ THEN emit socket event after saving
-    if (socketRef.current && socketRef.current.connected) {
-      console.log('Emitting notification-created socket event');
-      socketRef.current.emit('notification-created', {
-        bookingId,
-        userId: tutorId,
-        type: 'tutor_request',
-        title: '📋 New Tutor Request',
-        content: `You got a Tutor request from ${learnerName}`,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    return response;
-  } catch (error) {
-    console.error('❌ Error creating tutor request notification:', error);
-    throw error;
-  }
-};
+// NOTE: server is responsible for creating/storing tutor request notifications
+// and emitting `new-notification`. Client should not create the same
+// notification to avoid duplicates.
 
   const createRequestAcceptedNotification = async (learnerId, tutorName) => {
     try {

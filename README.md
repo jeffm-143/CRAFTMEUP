@@ -5,6 +5,7 @@ npm start
 npm install react-icons axios
 npm install react-router-dom
 npm install socket.io-client
+npm install chart.js react-chartjs-2
 
 
 BACK END (server)

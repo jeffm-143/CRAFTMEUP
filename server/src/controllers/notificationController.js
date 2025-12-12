@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { getIO } = require('../config/socket');
 
 exports.createNotification = async (req, res) => {
   try {
@@ -21,6 +22,19 @@ exports.createNotification = async (req, res) => {
         created_at: new Date()
       }
     });
+    
+    // Emit real-time event to the user's room
+    try {
+      const io = getIO();
+      io.to(`user-${userId}`).emit('new-notification', {
+        type,
+        title,
+        content,
+        timestamp: new Date()
+      });
+    } catch (emitErr) {
+      console.warn('Socket.IO not initialized or emit failed:', emitErr.message || emitErr);
+    }
   } catch (error) {
     console.error('Error creating notification:', error);
     res.status(500).json({ success: false, message: 'Failed to create notification' });
@@ -107,6 +121,18 @@ exports.createFeedbackNotification = async (req, res) => {
         created_at: new Date()
       }
     });
+    // Emit real-time event to the tutor's room
+    try {
+      const io = getIO();
+      io.to(`user-${tutorId}`).emit('new-notification', {
+        type: notificationData.type,
+        title: notificationData.title,
+        content: notificationData.content,
+        timestamp: new Date()
+      });
+    } catch (emitErr) {
+      console.warn('Socket.IO emit failed for feedback notification:', emitErr.message || emitErr);
+    }
   } catch (error) {
     console.error('Error creating feedback notification:', error);
     res.status(500).json({ success: false, message: 'Failed to create feedback notification' });
@@ -152,6 +178,18 @@ exports.createTutorRequestNotification = async (req, res) => {
         created_at: new Date()
       }
     });
+    // Emit real-time event to the tutor's room
+    try {
+      const io = getIO();
+      io.to(`user-${tutorId}`).emit('new-notification', {
+        type: notificationData.type,
+        title: notificationData.title,
+        content: notificationData.content,
+        timestamp: new Date()
+      });
+    } catch (emitErr) {
+      console.warn('Socket.IO emit failed for tutor request notification:', emitErr.message || emitErr);
+    }
   } catch (error) {
     console.error('Error creating tutor request notification:', error);
     res.status(500).json({ 

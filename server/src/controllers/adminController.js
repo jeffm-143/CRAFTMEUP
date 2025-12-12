@@ -59,7 +59,7 @@ exports.getConversationMessages = async (req, res) => {
 
 exports.getActivities = async (req, res) => {
   try {
-    const { page = 1, limit = 10, filterType = 'all', search = '' } = req.query;
+    const { page = 1, limit = 10, filterType = 'all', search = '', dateFrom, dateTo } = req.query;
     const offset = (page - 1) * limit;
 
     let query;
@@ -75,6 +75,9 @@ exports.getActivities = async (req, res) => {
       ? Array(6).fill(`%${search.toLowerCase()}%`)
       : [];
 
+    // Date filter condition to be applied at the combined result level
+    const dateCondition = (dateFrom && dateTo) ? `AND DATE(created_at) BETWEEN ? AND ?` : '';
+
     if (filterType === 'all') {
       query = `
         SELECT * FROM (
@@ -88,25 +91,32 @@ exports.getActivities = async (req, res) => {
           UNION ALL
           SELECT u.id, u.id as user_id, u.full_name, u.email, u.role, 'User Registered' as activity_type, CONCAT('Registered as ', u.role, ' - ', u.verification_status) as details, u.verification_status as status, u.id as related_id, u.created_at FROM users u
         ) as combined
-        WHERE 1=1 ${searchCondition}
+        WHERE 1=1 ${searchCondition} ${dateCondition}
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
       `;
-      params = [...searchParams, parseInt(limit), parseInt(offset)];
       
+      // Build params array
+      params = [...searchParams];
+      if (dateFrom && dateTo) {
+        params.push(dateFrom, dateTo);
+      }
+      params.push(parseInt(limit), parseInt(offset));
+      
+      // ✅ FIX: Include created_at in count query subquery
       countQuery = `
         SELECT COUNT(*) as total FROM (
-          SELECT s.id, u.full_name, u.email, u.role, 'Service Created' as activity_type, s.title as details, s.status FROM services s JOIN users u ON s.user_id = u.id
+          SELECT s.id, u.full_name, u.email, u.role, 'Service Created' as activity_type, s.title as details, s.status, s.created_at FROM services s JOIN users u ON s.user_id = u.id
           UNION ALL
-          SELECT t.id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Service: ', COALESCE(sv.title, 'N/A')) as details, t.status FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services sv ON t.service_id = sv.id
+          SELECT t.id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Service: ', COALESCE(sv.title, 'N/A')) as details, t.status, t.created_at FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services sv ON t.service_id = sv.id
           UNION ALL
-          SELECT wr.id, u.full_name, u.email, u.role, 'Wallet Request' as activity_type, CONCAT(wr.type, ': ', wr.amount) as details, wr.status FROM wallet_requests wr JOIN users u ON wr.user_id = u.id
+          SELECT wr.id, u.full_name, u.email, u.role, 'Wallet Request' as activity_type, CONCAT(wr.type, ': ', wr.amount) as details, wr.status, wr.created_at FROM wallet_requests wr JOIN users u ON wr.user_id = u.id
           UNION ALL
-          SELECT r.id, u.full_name, u.email, u.role, 'Report Submitted' as activity_type, r.reason as details, r.status FROM reports r JOIN users u ON r.reporter_id = u.id
+          SELECT r.id, u.full_name, u.email, u.role, 'Report Submitted' as activity_type, r.reason as details, r.status, r.created_at FROM reports r JOIN users u ON r.reporter_id = u.id
           UNION ALL
-          SELECT u.id, u.full_name, u.email, u.role, 'User Registered' as activity_type, u.role as details, u.verification_status as status FROM users u
+          SELECT u.id, u.full_name, u.email, u.role, 'User Registered' as activity_type, u.role as details, u.verification_status as status, u.created_at FROM users u
         ) as combined
-        WHERE 1=1 ${searchCondition}
+        WHERE 1=1 ${searchCondition} ${dateCondition}
       `;
     } else if (filterType === 'Service Created') {
       const searchCond = search && search.trim() !== '' 
@@ -116,16 +126,24 @@ exports.getActivities = async (req, res) => {
         ? Array(5).fill(`%${search.toLowerCase()}%`)
         : [];
       
+      const dateCond = (dateFrom && dateTo) ? `AND DATE(s.created_at) BETWEEN ? AND ?` : '';
+      
       query = `
         SELECT s.id, s.user_id, u.full_name, u.email, u.role, 'Service Created' as activity_type, s.title as details, s.status, s.id as related_id, s.created_at 
         FROM services s 
         JOIN users u ON s.user_id = u.id
-        WHERE 1=1 ${searchCond}
+        WHERE 1=1 ${searchCond} ${dateCond}
         ORDER BY s.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      countQuery = `SELECT COUNT(*) as total FROM services s JOIN users u ON s.user_id = u.id WHERE 1=1 ${searchCond}`;
-      params = [...searchP, parseInt(limit), parseInt(offset)];
+      countQuery = `SELECT COUNT(*) as total FROM services s JOIN users u ON s.user_id = u.id WHERE 1=1 ${searchCond} ${dateCond}`;
+      
+      params = [...searchP];
+      if (dateFrom && dateTo) {
+        params.push(dateFrom, dateTo);
+      }
+      params.push(parseInt(limit), parseInt(offset));
+      
     } else if (filterType === 'Transaction') {
       const searchCond = search && search.trim() !== '' 
         ? `AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(s.title) LIKE ? OR LOWER(t.status) LIKE ?)`
@@ -134,17 +152,25 @@ exports.getActivities = async (req, res) => {
         ? Array(5).fill(`%${search.toLowerCase()}%`)
         : [];
       
+      const dateCond = (dateFrom && dateTo) ? `AND DATE(t.created_at) BETWEEN ? AND ?` : '';
+      
       query = `
         SELECT t.id, t.user_id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Service: ', COALESCE(s.title, 'N/A')) as details, t.status, t.id as related_id, t.created_at 
         FROM transactions t 
         JOIN users u ON t.user_id = u.id
         LEFT JOIN services s ON t.service_id = s.id
-        WHERE 1=1 ${searchCond}
+        WHERE 1=1 ${searchCond} ${dateCond}
         ORDER BY t.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      countQuery = `SELECT COUNT(*) as total FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services s ON t.service_id = s.id WHERE 1=1 ${searchCond}`;
-      params = [...searchP, parseInt(limit), parseInt(offset)];
+      countQuery = `SELECT COUNT(*) as total FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services s ON t.service_id = s.id WHERE 1=1 ${searchCond} ${dateCond}`;
+      
+      params = [...searchP];
+      if (dateFrom && dateTo) {
+        params.push(dateFrom, dateTo);
+      }
+      params.push(parseInt(limit), parseInt(offset));
+      
     } else if (filterType === 'Wallet Request') {
       const searchCond = search && search.trim() !== '' 
         ? `AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(wr.type) LIKE ? OR LOWER(wr.status) LIKE ?)`
@@ -153,16 +179,24 @@ exports.getActivities = async (req, res) => {
         ? Array(5).fill(`%${search.toLowerCase()}%`)
         : [];
       
+      const dateCond = (dateFrom && dateTo) ? `AND DATE(wr.created_at) BETWEEN ? AND ?` : '';
+      
       query = `
         SELECT wr.id, wr.user_id, u.full_name, u.email, u.role, 'Wallet Request' as activity_type, CONCAT(wr.type, ': ', wr.amount) as details, wr.status, wr.id as related_id, wr.created_at 
         FROM wallet_requests wr 
         JOIN users u ON wr.user_id = u.id
-        WHERE 1=1 ${searchCond}
+        WHERE 1=1 ${searchCond} ${dateCond}
         ORDER BY wr.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      countQuery = `SELECT COUNT(*) as total FROM wallet_requests wr JOIN users u ON wr.user_id = u.id WHERE 1=1 ${searchCond}`;
-      params = [...searchP, parseInt(limit), parseInt(offset)];
+      countQuery = `SELECT COUNT(*) as total FROM wallet_requests wr JOIN users u ON wr.user_id = u.id WHERE 1=1 ${searchCond} ${dateCond}`;
+      
+      params = [...searchP];
+      if (dateFrom && dateTo) {
+        params.push(dateFrom, dateTo);
+      }
+      params.push(parseInt(limit), parseInt(offset));
+      
     } else if (filterType === 'Report Submitted') {
       const searchCond = search && search.trim() !== '' 
         ? `AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(r.reason) LIKE ? OR LOWER(r.status) LIKE ?)`
@@ -171,16 +205,24 @@ exports.getActivities = async (req, res) => {
         ? Array(5).fill(`%${search.toLowerCase()}%`)
         : [];
       
+      const dateCond = (dateFrom && dateTo) ? `AND DATE(r.created_at) BETWEEN ? AND ?` : '';
+      
       query = `
         SELECT r.id, r.reporter_id as user_id, u.full_name, u.email, u.role, 'Report Submitted' as activity_type, r.reason as details, r.status, r.id as related_id, r.created_at 
         FROM reports r 
         JOIN users u ON r.reporter_id = u.id
-        WHERE 1=1 ${searchCond}
+        WHERE 1=1 ${searchCond} ${dateCond}
         ORDER BY r.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      countQuery = `SELECT COUNT(*) as total FROM reports r JOIN users u ON r.reporter_id = u.id WHERE 1=1 ${searchCond}`;
-      params = [...searchP, parseInt(limit), parseInt(offset)];
+      countQuery = `SELECT COUNT(*) as total FROM reports r JOIN users u ON r.reporter_id = u.id WHERE 1=1 ${searchCond} ${dateCond}`;
+      
+      params = [...searchP];
+      if (dateFrom && dateTo) {
+        params.push(dateFrom, dateTo);
+      }
+      params.push(parseInt(limit), parseInt(offset));
+      
     } else if (filterType === 'User Registered') {
       const searchCond = search && search.trim() !== '' 
         ? `AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(u.verification_status) LIKE ?)`
@@ -189,19 +231,26 @@ exports.getActivities = async (req, res) => {
         ? Array(4).fill(`%${search.toLowerCase()}%`)
         : [];
       
+      const dateCond = (dateFrom && dateTo) ? `AND DATE(u.created_at) BETWEEN ? AND ?` : '';
+      
       query = `
         SELECT u.id, u.id as user_id, u.full_name, u.email, u.role, 'User Registered' as activity_type, CONCAT('Registered as ', u.role, ' - ', u.verification_status) as details, u.verification_status as status, u.id as related_id, u.created_at FROM users u
-        WHERE 1=1 ${searchCond}
+        WHERE 1=1 ${searchCond} ${dateCond}
         ORDER BY u.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      countQuery = `SELECT COUNT(*) as total FROM users u WHERE 1=1 ${searchCond}`;
-      params = [...searchP, parseInt(limit), parseInt(offset)];
+      countQuery = `SELECT COUNT(*) as total FROM users u WHERE 1=1 ${searchCond} ${dateCond}`;
+      
+      params = [...searchP];
+      if (dateFrom && dateTo) {
+        params.push(dateFrom, dateTo);
+      }
+      params.push(parseInt(limit), parseInt(offset));
     }
 
     const [activities] = await pool.execute(query, params);
     
-    // Use appropriate searchParams based on filter type
+    // Build count params - same as query params but without limit and offset
     let countParams = [];
     if (filterType === 'all' && search && search.trim() !== '') {
       countParams = Array(6).fill(`%${search.toLowerCase()}%`);
@@ -211,6 +260,10 @@ exports.getActivities = async (req, res) => {
       countParams = Array(4).fill(`%${search.toLowerCase()}%`);
     }
     
+    if (dateFrom && dateTo) {
+      countParams.push(dateFrom, dateTo);
+    }
+
     const [countResult] = await pool.execute(countQuery, countParams);
     
     const total = countResult[0].total;
@@ -333,7 +386,8 @@ exports.getActivityDetails = async (req, res) => {
             reference_number: data.reference_number || 'N/A',
             proof_image: data.proof_image || 'N/A',
             status: data.status || 'pending',
-            created_at: data.created_at
+            created_at: data.created_at,
+            user_id: data.user_id  // ✅ Include user_id for wallet operations
           }
         });
       }

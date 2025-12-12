@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeftIcon,
@@ -8,14 +8,51 @@ import {
   BellIcon,
 } from "@heroicons/react/24/outline";
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../../services/api';
+import io from 'socket.io-client';
+
+// Real-time updates: connect to Socket.IO and refresh on notification events
 
 export default function Notifications() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const socketRef = useRef(null);
 
   useEffect(() => {
     fetchNotifications();
+
+    // Setup socket for realtime notification refresh
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user?.id) {
+      const socket = io('http://localhost:5000', {
+        transports: ['websocket', 'polling']
+      });
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        console.log('🔌 Notifications: connected to socket');
+        socket.emit('user-online', user.id);
+      });
+
+      // When server emits a new notification, refresh the list
+      socket.on('new-notification', (payload) => {
+        console.log('🔔 Notifications: new-notification received', payload);
+        fetchNotifications();
+      });
+
+      // Also listen for notification-created events if emitted differently
+      socket.on('notification-created', (payload) => {
+        console.log('🔔 Notifications: notification-created received', payload);
+        fetchNotifications();
+      });
+
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.emit('user-offline', user.id);
+          socketRef.current.disconnect();
+        }
+      };
+    }
   }, []);
 
   const fetchNotifications = async () => {
@@ -44,6 +81,20 @@ export default function Notifications() {
     
     // Decrement unread count
     setUnreadCount(prev => Math.max(0, prev - 1));
+
+    // Inform other open clients/tabs that a notification was updated
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (socketRef.current && user?.id) {
+        socketRef.current.emit('notification-updated', {
+          userId: user.id,
+          notificationId,
+          action: 'marked_read'
+        });
+      }
+    } catch (emitErr) {
+      console.warn('Failed to emit notification-updated:', emitErr);
+    }
     
   } catch (error) {
     console.error('Error marking notification as read:', error);
@@ -67,6 +118,18 @@ export default function Notifications() {
     
     // Reset unread count to 0
     setUnreadCount(0);
+
+    // Inform other clients that user marked all as read
+    try {
+      if (socketRef.current) {
+        socketRef.current.emit('notification-updated', {
+          userId: user.id,
+          action: 'marked_all_read'
+        });
+      }
+    } catch (emitErr) {
+      console.warn('Failed to emit notification-updated (mark all):', emitErr);
+    }
     
   } catch (error) {
     console.error('Error marking all notifications as read:', error);

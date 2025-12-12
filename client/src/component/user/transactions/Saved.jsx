@@ -131,6 +131,9 @@ function FeedbackModal({ service, onClose }) {
     });
   };
 
+  // ✅ FIX: Ensure average_rating is always a valid number
+  const averageRating = parseFloat(service.average_rating) || 0;
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -182,10 +185,10 @@ function FeedbackModal({ service, onClose }) {
                     <p className="text-xs text-gray-600 uppercase font-semibold mb-1">Average Rating</p>
                     <div className="flex items-center gap-2">
                       <div className="flex gap-0.5">
-                        {renderStars(Math.round(service.average_rating))}
+                        {renderStars(Math.round(averageRating))}
                       </div>
                       <span className="text-lg font-bold text-blue-600">
-                        {service.average_rating.toFixed(1)}/5
+                        {averageRating.toFixed(1)}/5
                       </span>
                     </div>
                   </div>

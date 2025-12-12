@@ -62,6 +62,34 @@ exports.createService = async (req, res) => {
           io.emit('service-created', newService[0]);
         }
 
+                // --- Deduct service creation fee for tutors or both-role users ---
+                try {
+                    const fee = 10; // SkillCoin fee for adding a service
+                    const [userRows] = await pool.execute('SELECT role FROM users WHERE id = ?', [userId]);
+                    const role = userRows[0]?.role?.toLowerCase() || '';
+
+                    if (role === 'tutor' || role === 'both') {
+                        // Ensure wallet exists
+                        const [walletRows] = await pool.execute('SELECT balance FROM wallet WHERE user_id = ?', [userId]);
+                        if (walletRows.length === 0) {
+                            // initialize with default balance (50) like other routes
+                            await pool.execute('INSERT INTO wallet (user_id, balance) VALUES (?, ?)', [userId, 50.00]);
+                        }
+
+                        // Subtract fee
+                        await pool.execute('UPDATE wallet SET balance = balance - ? WHERE user_id = ?', [fee, userId]);
+
+                        // Record a wallet request / ledger entry for traceability
+                        await pool.execute(
+                            'INSERT INTO wallet_requests (user_id, type, amount, reference_number, proof_image, status) VALUES (?, ?, ?, ?, ?, ?)',
+                            [userId, 'debit', fee, 'service_fee', null, 'approved']
+                        );
+                    }
+                } catch (feeErr) {
+                    console.error('Error applying service creation fee:', feeErr);
+                    // don't fail the main request because of fee bookkeeping; just log
+                }
+
         res.status(201).json({
             message: 'Service created successfully',
             serviceId: result.insertId,
@@ -250,14 +278,43 @@ exports.createBooking = async (req, res) => {
             [userId, serviceId, status || 'pending', serviceId]
         );
 
-        const [booking] = await pool.execute(
-            `SELECT t.*, s.title as service_title, s.description, s.price, u.full_name as provider_name
-             FROM transactions t 
-             JOIN services s ON t.service_id = s.id 
-             JOIN users u ON s.user_id = u.id 
-             WHERE t.id = ? AND s.deleted_at IS NULL`,
-            [result.insertId]
-        );
+                const [booking] = await pool.execute(
+                        `SELECT t.*, s.title as service_title, s.description, s.price, s.user_id as provider_id, u.full_name as provider_name
+                         FROM transactions t 
+                         JOIN services s ON t.service_id = s.id 
+                         JOIN users u ON s.user_id = u.id 
+                         WHERE t.id = ? AND s.deleted_at IS NULL`,
+                        [result.insertId]
+                );
+
+                // Create a notification for the service provider (tutor)
+                try {
+                    const learnerId = userId;
+                    // Fetch learner name
+                    const [learnerRows] = await pool.execute('SELECT full_name FROM users WHERE id = ?', [learnerId]);
+                    const learnerName = (learnerRows && learnerRows[0] && learnerRows[0].full_name) ? learnerRows[0].full_name : 'A learner';
+
+                    const providerId = booking[0]?.provider_id;
+                    if (providerId) {
+                        const content = `You got a Tutor request from ${learnerName}`;
+                        await pool.execute(
+                            'INSERT INTO notifications (user_id, type, title, content, `read`) VALUES (?, ?, ?, ?, ?)',
+                            [providerId, 'tutor_request', 'New Tutor Request', content, false]
+                        );
+
+                        // Emit socket notification to provider's room if io initialized
+                        if (io) {
+                            io.to(`user-${providerId}`).emit('new-notification', {
+                                type: 'tutor_request',
+                                title: 'New Tutor Request',
+                                content,
+                                timestamp: new Date()
+                            });
+                        }
+                    }
+                } catch (notifErr) {
+                    console.error('Error creating tutor notification:', notifErr);
+                }
 
         res.status(201).json({
             message: 'Booking created successfully',

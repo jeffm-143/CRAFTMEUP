@@ -97,6 +97,25 @@ socket.on('booking-created', (data) => {
       console.log('✅ Notification broadcasted successfully');
     });
 
+    // When a client marks a notification as read (or updates it), propagate
+    // the change to all sockets in the user's room so badges stay in sync.
+    socket.on('notification-updated', (data) => {
+      console.log('🔁 notification-updated received:', data);
+      if (!data || !data.userId) {
+        console.error('❌ notification-updated received without userId');
+        return;
+      }
+
+      io.to(`user-${data.userId}`).emit('notification-updated', {
+        notificationId: data.notificationId || null,
+        userId: data.userId,
+        action: data.action || 'updated',
+        timestamp: new Date()
+      });
+
+      console.log('✅ notification-updated emitted to room:', `user-${data.userId}`);
+    });
+
     // Payment completed
     socket.on('payment-completed', (data) => {
       const { bookingId, fromUserId, toUserId, amount } = data;

@@ -82,6 +82,7 @@ export default function MyServices() {
   const [userData, setUserData] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [verificationStatus, setVerificationStatus] = useState(null);
   const [newService, setNewService] = useState({
     title: "",
     description: "",
@@ -175,6 +176,7 @@ export default function MyServices() {
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
+    setVerificationStatus(storedUser?.verification_status?.toLowerCase());
   }, []);
 
   // Fetch wallet balance when the modal opens (if tutor/both)
@@ -213,6 +215,22 @@ export default function MyServices() {
       fetchUserServices();
     }
   }, [userData]);
+
+    const checkVerificationBeforeCreating = () => {
+    const role = userData?.role?.toLowerCase() || '';
+    
+    if ((role === 'tutor' || role === 'both') && verificationStatus !== 'approved') {
+      setToast({
+        message: "Your account must be verified before creating services. Please wait for admin approval.",
+        type: "error",
+        isLoading: false,
+        showProgress: false,
+        duration: 4000,
+      });
+      return false;
+    }
+    return true;
+  };
 
 const fetchUserServices = async () => {
   try {
@@ -345,6 +363,10 @@ const fetchUserServices = async () => {
 
   const handleCreateOrUpdate = async (e) => {
     e.preventDefault();
+
+     if (!editingService && !checkVerificationBeforeCreating()) {
+      return;
+    }
     
     if (newService.availability.length === 0) {
       setToast({
@@ -419,6 +441,10 @@ const fetchUserServices = async () => {
       fetchUserServices();
     } catch (error) {
       console.error('Error creating/updating service:', error);
+
+      const errorMessage = error.response?.data?.message || 
+        (editingService ? "Failed to update service" : "Failed to create service");
+      
       setToast({
         message: editingService ? "Failed to update service" : "Failed to create service",
         type: "error",
@@ -439,7 +465,7 @@ const fetchUserServices = async () => {
               {editingService ? "Edit Service" : "Add New Service"}
             </h2>
             {(!editingService && (role === 'tutor' || role === 'both')) && (
-              <div className="text-sm text-white/90 mr-3">
+              <div className="text-sm text-white/100 mr-3">
                 Balance: <span className="font-semibold">SC {walletBalance !== null ? walletBalance : '—'}</span>
               </div>
             )}
@@ -469,7 +495,7 @@ const fetchUserServices = async () => {
 
         {/* Fee note for tutors */}
         {(!editingService && (role === 'tutor' || role === 'both')) && (
-          <div className="max-w-2xl mx-auto w-full px-4 py-3 sm:py-4">
+          <div className="max-w-2xl mx-auto w-full px-2 py-3 sm:py-4">
             <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
               Note: Adding a new service charges a SkillCoin fee of <span className="font-semibold">10 SC</span>. The fee will be deducted from your wallet automatically.
             </div>
@@ -757,8 +783,12 @@ const fetchUserServices = async () => {
               >
                 <PlusIcon className="h-4 w-4" /> Add Service
               </button>
+              {/* ✅ MOBILE BUTTON WITH VERIFICATION CHECK */}
               <button
                 onClick={() => {
+                  if (!checkVerificationBeforeCreating()) {
+                    return;
+                  }
                   setShowServiceModal(true);
                   setEditingService(null);
                   setNewService({
@@ -776,6 +806,28 @@ const fetchUserServices = async () => {
             </div>
           </div>
         </div>
+        
+        {/* ✅ ADD VERIFICATION WARNING BANNER */}
+        {verificationStatus !== 'approved' && (
+          <div className="mx-4 mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700 font-medium">
+                  Account Verification Required
+                </p>
+                <p className="text-sm text-yellow-600 mt-1">
+                  Your account is currently <span className="font-semibold">{verificationStatus}</span>. You cannot create services until an administrator verifies your account.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+       
 
         
 {/* Service List */}

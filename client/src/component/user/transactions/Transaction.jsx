@@ -739,116 +739,138 @@ const handleRejectBooking = async (bookingId) => {
     return colors[status] || 'bg-gray-100 text-gray-700';
   };
 
-  const renderBooking = (booking) => {
-    const style = getTransactionStyle(booking);
-    
-    return (
-      <div key={booking.id} className={`border-2 ${style.borderColor} ${style.bgColor} rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all flex flex-col`}>
-        {/* Top section with icon and info */}
-        <div className="flex items-start gap-3 mb-3">
-          <div className="flex-shrink-0 mt-1">
-            {style.icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-xs sm:text-base text-gray-900 truncate">{booking.service_title}</h3>
-            <p className="text-xs text-gray-600 mt-1">
-              {booking.is_provider ? `Requested by: ${booking.requester_name}` : `Provider: ${booking.provider_name}`}
-            </p>
-          </div>
-          <div className="text-right flex-shrink-0">
-            <p className={`font-semibold text-xs sm:text-base ${style.amountColor}`}>
-              {style.prefix}SC {Number(booking.price).toFixed(2)}
-            </p>
-          </div>
+// ULTIMATE FIX - Simplest approach with NO conditional wrapper issues
+// Replace the entire renderBooking function
+
+const renderBooking = (booking) => {
+  const style = getTransactionStyle(booking);
+  
+  return (
+    <div key={booking.id} className={`border-2 ${style.borderColor} ${style.bgColor} rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all flex flex-col`}>
+      {/* Top section with icon and info */}
+      <div className="flex items-start gap-3 mb-3">
+        <div className="flex-shrink-0 mt-1">
+          {style.icon}
         </div>
-
-        {/* Description */}
-        {booking.description && (
-          <p className="text-gray-500 text-xs line-clamp-2 mb-2 pl-8">{booking.description}</p>
-        )}
-
-        {/* Transaction type label */}
-        <div className="mb-3 pl-8">
-          <span className={`inline-block text-xs font-semibold px-2 py-1 rounded ${
-            booking.is_provider
-              ? 'bg-green-200 text-green-800'
-              : 'bg-red-200 text-red-800'
-          }`}>
-            {style.label}
-          </span>
-        </div>
-
-        {/* Status and date */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 pb-3 border-t border-gray-200">
-          <div className="flex items-center space-x-2">
-            <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full ${getStatusColor(booking.status)}`}>
-              <span className={`w-2 h-2 mr-1.5 rounded-full ${
-                booking.status === 'pending' ? 'bg-yellow-500' :
-                booking.status === 'ongoing' ? 'bg-blue-500' :
-                booking.status === 'ready' ? 'bg-purple-500' :
-                booking.status === 'completed' ? 'bg-green-500' :
-                'bg-red-500'
-              }`}></span>
-              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-            </span>
-          </div>
-          <p className="text-gray-400 text-xs">
-            {new Date(booking.created_at).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit'
-            })}
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-xs sm:text-base text-gray-900 truncate">{booking.service_title}</h3>
+          <p className="text-xs text-gray-600 mt-1">
+            {booking.is_provider ? `Requested by: ${booking.requester_name}` : `Provider: ${booking.provider_name}`}
           </p>
         </div>
+        <div className="text-right flex-shrink-0">
+          <p className={`font-semibold text-xs sm:text-base ${style.amountColor}`}>
+            {style.prefix}SC {Number(booking.price).toFixed(2)}
+          </p>
+        </div>
+      </div>
 
-        {/* Action Buttons */}
-        {(booking.is_provider || (!booking.is_provider && booking.status === 'ready')) && (
-          <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
-            {booking.is_provider && booking.status === 'ongoing' && (
+      {/* Description */}
+      {booking.description && (
+        <p className="text-gray-500 text-xs line-clamp-2 mb-2 pl-8">{booking.description}</p>
+      )}
+
+      {/* Transaction type label */}
+      <div className="mb-3 pl-8">
+        <span className={`inline-block text-xs font-semibold px-2 py-1 rounded ${
+          booking.is_provider
+            ? 'bg-green-200 text-green-800'
+            : 'bg-red-200 text-red-800'
+        }`}>
+          {style.label}
+        </span>
+      </div>
+
+      {/* Status and date */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 pb-3 border-t border-gray-200 pt-3">
+        <div className="flex items-center space-x-2">
+          <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full ${getStatusColor(booking.status)}`}>
+            <span className={`w-2 h-2 mr-1.5 rounded-full ${
+              booking.status === 'pending' ? 'bg-yellow-500' :
+              booking.status === 'ongoing' ? 'bg-blue-500' :
+              booking.status === 'ready' ? 'bg-purple-500' :
+              booking.status === 'completed' ? 'bg-green-500' :
+              'bg-red-500'
+            }`}></span>
+            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+          </span>
+        </div>
+        <p className="text-gray-400 text-xs">
+          {new Date(booking.created_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          })}
+        </p>
+      </div>
+
+      {/* Action Buttons - Using render functions to avoid conditional wrapper issues */}
+      {(() => {
+        // Tutor with pending status - Accept/Reject
+        if (booking.is_provider && booking.status === 'pending') {
+          return (
+            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+              <button
+                onClick={() => handleAcceptBooking(booking.id)}
+                className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => handleRejectBooking(booking.id)}
+                className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs sm:text-sm font-medium transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          );
+        }
+        
+        // Tutor with ongoing status - Mark Ready
+        if (booking.is_provider && booking.status === 'ongoing') {
+          return (
+            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
               <button
                 onClick={() => handleMarkReady(booking.id)}
                 className="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-xs sm:text-sm font-medium transition-colors"
               >
                 Mark Ready
               </button>
-            )}
-
-            {booking.is_provider && booking.status === 'ready' && (
-              <div className="flex-1 px-3 py-2 text-gray-500 text-xs text-center bg-gray-100 rounded-lg">
-                Waiting for completion
+            </div>
+          );
+        }
+        
+        // Tutor with ready status - Waiting message
+        if (booking.is_provider && booking.status === 'ready') {
+          return (
+            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+              <div className="flex-1 px-3 py-2 text-gray-500 text-xs text-center bg-gray-100 rounded-lg font-medium">
+                Waiting for learner to confirm completion
               </div>
-            )}
-
-            {booking.is_provider && booking.status === 'pending' && (
-              <div className="flex gap-1.5 sm:gap-2 w-full">
-                <button
-                  onClick={() => handleAcceptBooking(booking.id)}
-                  className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => handleRejectBooking(booking.id)}
-                  className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs sm:text-sm font-medium transition-colors"
-                >
-                  Reject
-                </button>
-              </div>
-            )}
-
-            {!booking.is_provider && booking.status === 'ready' && (
+            </div>
+          );
+        }
+        
+        // Learner with ready status - Confirm Completion
+        if (!booking.is_provider && booking.status === 'ready') {
+          return (
+            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
               <button
                 onClick={() => handleConfirmCompletion(booking)}
                 className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs sm:text-sm font-medium transition-colors"
               >
                 Confirm Completion
               </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
+            </div>
+          );
+        }
+        
+        // All other cases (completed, rejected, learner ongoing, etc.) - return null (nothing)
+        return null;
+      })()}
+    </div>
+  );
+};
 
   const renderBookings = () => (
     <div className="flex-1 overflow-y-auto">

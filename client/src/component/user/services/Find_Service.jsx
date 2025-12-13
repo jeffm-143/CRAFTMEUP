@@ -139,6 +139,25 @@ function FeedbackModal({ service, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      {/* YELLOW ALERT HERE */}
+    {verificationStatus !== "approved" && (
+      <div className="w-full max-w-2xl mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg">
+        <div className="flex items-start">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-yellow-700 font-medium">Account Verification Required</p>
+            <p className="text-sm text-yellow-600 mt-1">
+              Your account is currently <span className="font-semibold">{verificationStatus}</span>.  
+              You cannot book services until an administrator verifies your account.
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sm:p-6 flex justify-between items-center">
@@ -288,6 +307,7 @@ function FeedbackModal({ service, onClose }) {
           </button>
         </div>
       </div>
+      
     </div>
   );
 }
@@ -363,6 +383,7 @@ function BookingModal({ service, onClose, onConfirm }) {
   );
 }
 
+
 // FilterPanel component
 const FilterPanel = ({ filters, handleFilterChange, categories }) => (
   <div className="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-gray-100 mb-4 mx-4">
@@ -416,6 +437,8 @@ const FilterPanel = ({ filters, handleFilterChange, categories }) => (
   </div>
 );
 
+
+
 const FindServices = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -434,7 +457,9 @@ const FindServices = () => {
   const [selectedService, setSelectedService] = useState(null);
   const [selectedFeedbackService, setSelectedFeedbackService] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [verificationStatus, setVerificationStatus] = useState(null);
   const socketRef = useRef(null);
+  const [showVerificationAlert, setShowVerificationAlert] = useState(false);
 
   const categories = [
     "All",
@@ -583,6 +608,8 @@ const FindServices = () => {
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
+    setVerificationStatus(storedUser?.verification_status?.toLowerCase());
+
     if (storedUser?.role?.toLowerCase() === 'tutor') {
       navigate('/dashboard');
       return;
@@ -750,6 +777,15 @@ const FindServices = () => {
 const handleConfirmBooking = async (service) => {
   try {
     const user = JSON.parse(localStorage.getItem('user'));
+    const verificationStatus = user?.verification_status?.toLowerCase();
+
+
+if (verificationStatus !== 'approved') {
+  setSelectedService(null);
+  setShowVerificationAlert(true);
+  return;
+}
+
     // ✅ ADD THESE DEBUG LOGS
     console.log('🔍 Full user object:', user);
     console.log('🔍 user.fullName:', user?.fullName);
@@ -798,7 +834,10 @@ const handleConfirmBooking = async (service) => {
     }
   } catch (error) {
     console.error('Booking error:', error);
-    alert(error.response?.data?.message || 'Failed to book service. Please try again.');
+    setSelectedService(null);
+
+    const errorMessage = error.response?.data?.message || 'Failed to book service. Please try again.';
+    alert(errorMessage);
   }
 };
 
@@ -1068,6 +1107,37 @@ const handleConfirmBooking = async (service) => {
           onClose={() => setSelectedFeedbackService(null)} 
         />
       )}
+      {/* Verification Alert Modal - ADD THIS HERE */}
+    {showVerificationAlert && (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+              <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Verification Required</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {verificationStatus === 'pending' 
+                ? 'Your account verification is pending review.'
+                : verificationStatus === 'rejected'
+                ? 'Your account verification was not approved. Please contact support.'
+                : 'Your account needs to be verified.'}
+            </p>
+            <p className="text-sm text-gray-600 mb-6">
+              You'll be able to book services once approved by an administrator (typically 24-48 hours).
+            </p>
+            <button
+              onClick={() => setShowVerificationAlert(false)}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

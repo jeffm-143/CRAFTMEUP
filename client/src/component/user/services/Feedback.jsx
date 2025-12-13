@@ -5,8 +5,8 @@ import { submitFeedback } from '../../../services/api';
 
 const API_URL = 'http://localhost:5000';
 
-// ✅ Report User Modal - SAME CONTENT AS PROVIDER PROFILE
-function ReportUserModal({ userId, userName, onClose }) {
+// ✅ Report User Modal - Enhanced with booking_id
+function ReportUserModal({ userId, userName, onClose, bookingId }) {
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -32,7 +32,8 @@ function ReportUserModal({ userId, userName, onClose }) {
         reported_user_id: parseInt(userId),
         reporter_id: parseInt(currentUser.id),
         reason: reportReason,
-        description: reportDescription
+        description: reportDescription,
+        booking_id: bookingId || null // ✅ Include booking_id for refund eligibility
       };
 
       console.log('📝 Submitting report with payload:', reportPayload);
@@ -120,6 +121,12 @@ function ReportUserModal({ userId, userName, onClose }) {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-xs text-blue-700 leading-relaxed">
               <strong>Note:</strong> False reports may result in your account being suspended. Please ensure all information is accurate.
+              {bookingId && (
+                <>
+                  <br /><br />
+                  <strong>Refund Policy:</strong> If this report is validated, you may be eligible for a 70% refund of your payment.
+                </>
+              )}
             </p>
           </div>
 
@@ -397,11 +404,12 @@ export default function Feedback() {
         </div>
       </div>
 
-      {/* ✅ Report User Modal */}
+      {/* ✅ Report User Modal - Pass booking.id for refund eligibility */}
       {showReportModal && (
         <ReportUserModal
           userId={reportingUserId}
           userName={reportingUserName}
+          bookingId={booking.id} // ✅ Pass booking ID
           onClose={() => {
             setShowReportModal(false);
             setReportingUserId(null);

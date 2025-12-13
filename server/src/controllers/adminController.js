@@ -391,62 +391,84 @@ exports.getActivityDetails = async (req, res) => {
           }
         });
       }
-    } else if (type === 'Report Submitted') {
-      const [result] = await pool.execute(
-        `SELECT r.*, u.full_name as reporter_name, u.email as reporter_email,
-                reported_user.full_name as reported_user_name, reported_user.email as reported_user_email
-         FROM reports r
-         JOIN users u ON r.reporter_id = u.id
-         JOIN users reported_user ON r.reported_user_id = reported_user.id
-         WHERE r.id = ?`,
-        [activityId]
-      );
+} else if (type === 'Report Submitted') {
+  const [result] = await pool.execute(
+    `SELECT r.*, 
+            u.full_name as reporter_name, 
+            u.email as reporter_email,
+            reported_user.full_name as reported_user_name, 
+            reported_user.email as reported_user_email
+     FROM reports r
+     JOIN users u ON r.reporter_id = u.id
+     JOIN users reported_user ON r.reported_user_id = reported_user.id
+     WHERE r.id = ?`,
+    [activityId]
+  );
 
-      if (result && result.length > 0) {
-        const data = result[0];
-        return res.json({
-          success: true,
-          data: {
-            id: data.id,
-            activity_type: 'Report Submitted',
-            reporter_name: data.reporter_name,
-            reporter_email: data.reporter_email,
-            reported_user_name: data.reported_user_name,
-            reported_user_email: data.reported_user_email,
-            reason: data.reason || 'N/A',
-            description: data.description || 'N/A',
-            status: data.status || 'pending',
-            created_at: data.created_at
-          }
-        });
+  if (result && result.length > 0) {
+    const data = result[0];
+    return res.json({
+      success: true,
+      data: {
+        id: data.id,
+        activity_type: 'Report Submitted',
+        reporter_id: data.reporter_id,  
+        reported_user_id: data.reported_user_id, 
+        reporter_name: data.reporter_name,
+        reporter_email: data.reporter_email,
+        reported_user_name: data.reported_user_name,
+        reported_user_email: data.reported_user_email,
+        reason: data.reason || 'N/A',
+        description: data.description || 'N/A',
+        status: data.status || 'pending',
+        violationType: data.violation_type,  
+        adminNotes: data.admin_notes,  
+        created_at: data.created_at,
+        updated_at: data.updated_at  
       }
-    } else if (type === 'User Registered') {
-      const [result] = await pool.execute(
-        `SELECT u.*, u.id, u.full_name, u.email, u.role, u.course, u.year, u.verification_status, u.created_at
-        FROM users u
-        WHERE u.id = ?`,
-        [activityId]
-      );
+    });
+  }
+} else if (type === 'User Registered') {
+  const [result] = await pool.execute(
+    `SELECT u.id, u.full_name, u.email, u.role, u.course, u.year, 
+            u.verification_status, u.created_at,
+            u.student_id_file, u.study_load_file
+     FROM users u
+     WHERE u.id = ?`,
+    [activityId]
+  );
 
-      if (result && result.length > 0) {
-        const data = result[0];
-        return res.json({
-          success: true,
-          data: {
-            id: data.id,
-            activity_type: 'User Registered',
-            full_name: data.full_name,
-            email: data.email,
-            role: data.role,
-            course: data.course || 'N/A',
-            year: data.year || 'N/A',
-            verification_status: data.verification_status || 'pending',
-            created_at: data.created_at
-          }
-        });
+  if (result && result.length > 0) {
+    const data = result[0];
+    
+    // Convert Buffer to base64 if needed
+    const convertToBase64 = (buffer) => {
+      if (!buffer) return null;
+      if (Buffer.isBuffer(buffer)) {
+        return buffer.toString('base64');
       }
-    }
-
+      return buffer;
+    };
+    
+    return res.json({
+      success: true,
+      data: {
+        id: data.id,
+        activity_type: 'User Registered',
+        full_name: data.full_name,
+        email: data.email,
+        role: data.role,
+        student_id_file: convertToBase64(data.student_id_file),
+        study_load_file: convertToBase64(data.study_load_file),
+        course: data.course || 'N/A',
+        year: data.year || 'N/A',
+        verification_status: data.verification_status || 'pending',
+        created_at: data.created_at,
+        user_id: data.id
+      }
+    });
+  }
+}
     // Fallback: Search for Transaction if type not specified
     const [result] = await pool.execute(
       `SELECT t.*, 

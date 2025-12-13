@@ -49,44 +49,63 @@ const ProviderProfile = () => {
     }
   };
 
-  const handleReportSubmit = async (e) => {
+const handleReportSubmit = async (e) => {
     e.preventDefault();
     
-    if (!reportReason.trim() || !reportDescription.trim()) {
+    // Trim and validate
+    const trimmedReason = reportReason.trim();
+    const trimmedDescription = reportDescription.trim();
+    
+    if (!trimmedReason || !trimmedDescription) {
       alert('Please fill in all fields');
       return;
     }
 
     try {
       setSubmittingReport(true);
-      const currentUser = JSON.parse(localStorage.getItem('user'));
       
-      if (!currentUser?.id) {
-        alert('Please login first');
+      // ✅ Get current user from localStorage - check multiple possible keys
+      let currentUser = null;
+      const userStr = localStorage.getItem('user');
+      
+      console.log('🔍 Checking localStorage for user:', userStr);
+      
+      if (userStr) {
+        try {
+          currentUser = JSON.parse(userStr);
+          console.log('✅ Parsed user:', currentUser);
+        } catch (parseError) {
+          console.error('❌ Failed to parse user from localStorage:', parseError);
+        }
+      }
+      
+      // ✅ Check if user exists and has an id
+      if (!currentUser || !currentUser.id) {
+        console.error('❌ No valid user found. localStorage user:', currentUser);
+        alert('Please login first to submit a report');
+        setSubmittingReport(false);
         return;
       }
 
-      console.log('Submitting report with:', {
-        reported_user_id: userId,
-        reporter_id: currentUser.id,
-        reason: reportReason,
-        description: reportDescription
-      });
+      const reportData = {
+        reported_user_id: parseInt(userId),
+        reporter_id: parseInt(currentUser.id),
+        reason: trimmedReason,
+        description: trimmedDescription
+      };
+
+      console.log('📤 Submitting report with:', reportData);
 
       const response = await fetch(`${API_URL}/api/reports/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reported_user_id: parseInt(userId),
-          reporter_id: parseInt(currentUser.id),
-          reason: reportReason,
-          description: reportDescription
-        })
+        body: JSON.stringify(reportData)
       });
 
       const data = await response.json();
+      console.log('📥 Server response:', data);
 
-      if (response.ok) {
+      if (response.ok && data.success) {
         alert('Report submitted successfully! Our team will review it shortly.');
         setShowReportModal(false);
         setReportReason('');
@@ -95,7 +114,7 @@ const ProviderProfile = () => {
         alert(data.message || 'Failed to submit report');
       }
     } catch (error) {
-      console.error('Error submitting report:', error);
+      console.error('❌ Error submitting report:', error);
       alert('Failed to submit report. Please try again.');
     } finally {
       setSubmittingReport(false);

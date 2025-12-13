@@ -636,4 +636,33 @@ export const getUserSpent = async (userId) => {
   }
 };
 
+export const getRevenueStats = async (startDate = null, endDate = null) => {
+  try {
+    const params = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    
+    const response = await api.get('/transactions/revenue/stats', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Get revenue stats error:', error);
+    throw error;
+  }
+};
+
+export const getRevenueTransactions = async (page = 1, limit = 20, type = null, startDate = null, endDate = null) => {
+  try {
+    const params = { page, limit };
+    if (type) params.type = type;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    
+    const response = await api.get('/transactions/revenue/transactions', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Get revenue transactions error:', error);
+    throw error;
+  }
+};
+
 export default api;

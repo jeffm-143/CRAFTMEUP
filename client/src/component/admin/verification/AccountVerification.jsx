@@ -15,6 +15,7 @@ export default function AccountVerification() {
   const [loading, setLoading] = useState(true);
   const [studentIdPreview, setStudentIdPreview] = useState(null);
   const [studyLoadPreview, setStudyLoadPreview] = useState(null);
+  const [enlargeImage, setEnlargeImage] = useState(null);
 
   useEffect(() => {
     fetchUnverifiedUsers();
@@ -230,39 +231,53 @@ export default function AccountVerification() {
                 <div className="space-y-4">
                   <h3 className="font-semibold text-lg text-gray-800 mb-4">Submitted Documents</h3>
                   
-                  <div>
-                    <label className="text-sm text-gray-600 font-medium mb-2 block">Student ID</label>
-                    {studentIdPreview ? (
-                      <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                        <img 
-                          src={studentIdPreview}
-                          alt="Student ID"
-                          className="w-full object-contain max-h-48"
-                        />
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-                        <p className="text-gray-500 text-sm">No file uploaded</p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm text-gray-600 font-medium mb-2 block">Study Load</label>
-                    {studyLoadPreview ? (
-                      <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                        <img 
-                          src={studyLoadPreview}
-                          alt="Study Load"
-                          className="w-full object-contain max-h-48"
-                        />
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-                        <p className="text-gray-500 text-sm">No file uploaded</p>
-                      </div>
-                    )}
-                  </div>
+                    {/* Inside your Modal Content for each document */}
+                    <div>
+                      <label className="text-sm text-gray-600 font-medium mb-2 block">Student ID</label>
+                      {studentIdPreview ? (
+                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
+                          <img
+                            src={studentIdPreview}
+                            alt="Student ID"
+                            className="w-full object-contain max-h-48"
+                          />
+                          <button
+                            onClick={() => setEnlargeImage(studentIdPreview)}
+                            className="mt-2 px-4 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          >
+                            View
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
+                          <p className="text-gray-500 text-sm">No file uploaded</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-gray-600 font-medium mb-2 block">Study Load</label>
+                      {studyLoadPreview ? (
+                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
+                          <img
+                            src={studyLoadPreview}
+                            alt="Study Load"
+                            className="w-full object-contain max-h-48"
+                          />
+                          <button
+                            onClick={() => setEnlargeImage(studyLoadPreview)}
+                            className="mt-2 px-4 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          >
+                            View
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
+                          <p className="text-gray-500 text-sm">No file uploaded</p>
+                        </div>
+                      )}
+                    </div>
+
                 </div>
               </div>
             </div>
@@ -287,6 +302,26 @@ export default function AccountVerification() {
           </div>
         </div>
       )}
-    </div>
-  );
+      {/* Enlarged Image Modal */}
+      {enlargeImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+          <div className="relative">
+            {/* Close button */}
+            <button
+              onClick={() => setEnlargeImage(null)}
+              className="absolute top-2 right-2 text-white bg-black/50 rounded-full p-2 hover:bg-black/70 transition-colors"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+
+            <img
+              src={enlargeImage}
+              alt="Enlarged"
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+  </div>
+);
 }

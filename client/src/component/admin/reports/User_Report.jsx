@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MagnifyingGlassIcon,
@@ -11,7 +11,10 @@ import {
   ShieldExclamationIcon,
 } from "@heroicons/react/24/outline";
 import AdminSidebar from "../../AdminSidebar";
-import { getAllReports, updateReportStatus, getUserReportHistory, notifyUser } from "../../../services/api";
+import { getAllReports, updateReportStatus } from "../../../services/api";
+import io from "socket.io-client"; // ✅ Add socket.io-client
+
+const SOCKET_URL = 'http://localhost:5000'; // ✅ Socket server URL
 
 const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, violationTypes, getStatusBadgeClass }) => {
   const [selectedViolationType, setSelectedViolationType] = useState(selectedReport?.violationType || 'minor');
@@ -143,28 +146,106 @@ const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, 
             </div>
           )}
 
-          {/* Resolution Details if Resolved */}
-          {isResolved && (
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-5 border border-purple-200">
-              <h4 className="font-bold text-purple-900 mb-3">Resolution Details</h4>
-              <div className="space-y-2">
-                <p className="text-sm text-purple-700">
-                  <span className="font-semibold">Status:</span>
-                  <span className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(selectedReport.status)}`}>
-                    {selectedReport.status}
-                  </span>
-                </p>
-                <p className="text-sm text-purple-700">
-                  <span className="font-semibold">Resolved on:</span> {selectedReport.updated_at ? new Date(selectedReport.updated_at).toLocaleString() : 'Not resolved'}
-                </p>
-                {selectedReport.adminNotes && (
-                  <p className="text-sm text-purple-700">
-                    <span className="font-semibold">Notes:</span> {selectedReport.adminNotes}
-                  </p>
-                )}
-              </div>
-            </div>
+{/* Resolution Details if Resolved */}
+{isResolved && (
+  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border-2 border-purple-200 shadow-sm">
+    <h4 className="font-bold text-purple-900 mb-5 text-lg flex items-center gap-2">
+      <CheckCircleIcon className="w-6 h-6 text-purple-600" />
+      Resolution Details
+    </h4>
+    
+    <div className="space-y-4">
+      {/* Status Badge */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
+        <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Resolution Status</p>
+        <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${getStatusBadgeClass(selectedReport.status)}`}>
+          {selectedReport.status === 'invalid' && (
+            <>
+              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              Marked as Invalid
+            </>
           )}
+          {selectedReport.status === 'warning' && (
+            <>
+              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              Warning Issued
+            </>
+          )}
+          {selectedReport.status === 'suspended' && (
+            <>
+              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+              </svg>
+              User Suspended
+            </>
+          )}
+          {!['invalid', 'warning', 'suspended'].includes(selectedReport.status) && (
+            <>
+              <CheckCircleIcon className="w-4 h-4 mr-2" />
+              {selectedReport.status}
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* Resolved On */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
+        <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Resolved On</p>
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p className="text-gray-900 font-semibold text-base">
+            {selectedReport.updated_at 
+              ? new Date(selectedReport.updated_at).toLocaleString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true
+                })
+              : 'Not Available'}
+          </p>
+        </div>
+      </div>
+
+      {/* Admin Notes */}
+      {selectedReport.adminNotes && (
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
+          <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Admin Notes</p>
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-purple-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-gray-800 text-sm leading-relaxed flex-1">{selectedReport.adminNotes}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Resolution Summary Info Box */}
+      <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg p-4 text-white shadow-md">
+        <div className="flex items-start gap-3">
+          <div className="bg-white/20 rounded-full p-2 flex-shrink-0">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-sm mb-1.5">Report Resolved</p>
+            <p className="text-white/90 text-xs leading-relaxed">
+              This report has been reviewed and closed by an administrator. The resolution status indicates the action taken on the reported content or user.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
         </div>
 
         {/* Action Buttons */}
@@ -232,6 +313,9 @@ export default function UserReports() {
     thisWeek: 0
   });
 
+  // ✅ Socket reference
+  const socketRef = useRef(null);
+
   const violationTypes = {
     minor: ['spam', 'rude_message', 'irrelevant_post'],
     serious: ['harassment', 'scamming', 'fake_credentials', 'offensive_behavior'],
@@ -240,6 +324,30 @@ export default function UserReports() {
 
   useEffect(() => {
     fetchReports();
+
+    // ✅ Initialize Socket.IO connection
+    socketRef.current = io(SOCKET_URL, {
+      transports: ['websocket', 'polling']
+    });
+
+    // ✅ Listen for new reports
+    socketRef.current.on('new-report', (data) => {
+      console.log('🔔 New report received via socket:', data);
+      
+      // ✅ Automatically refresh the reports list
+      fetchReports();
+      
+      // ✅ Optional: Show a toast notification
+      // You can add a toast library later if needed
+      console.log('📋 Reports list refreshed automatically!');
+    });
+
+    // ✅ Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
   }, []);
 
   const fetchReports = async () => {
@@ -280,51 +388,41 @@ export default function UserReports() {
     }
   };
 
-  const handleResolveReport = async (reportId, resolution, violationType = 'minor') => {
-    try {
-      console.log('Resolving report:', { reportId, resolution, violationType });
+const handleResolveReport = async (reportId, resolution, violationType = 'minor') => {
+  try {
+    console.log('Resolving report:', { reportId, resolution, violationType });
 
-      const statusData = {
-        status: resolution,
-        violationType: violationType || 'minor',
-        adminNotes: resolution === 'invalid' 
-          ? 'No violation found' 
-          : `${violationType} violation confirmed - ${resolution} action taken`,
-        resolvedAt: new Date().toISOString()
-      };
+    const statusData = {
+      status: resolution,
+      violationType: violationType || 'minor',
+      adminNotes: resolution === 'invalid' 
+        ? 'No violation found' 
+        : `${violationType} violation confirmed - ${resolution} action taken`,
+      resolvedAt: new Date().toISOString()
+    };
 
-      console.log('📝 Sending status data:', statusData);
+    console.log('📝 Sending status data:', statusData);
 
-      await updateReportStatus(reportId, statusData);
-
-      const notifications = [
-        notifyUser(selectedReport.reporter_id, {
-          type: 'report_resolved',
-          message: `Your report has been reviewed and marked as ${resolution}.`
-        })
-      ];
-
-      if (resolution !== 'invalid') {
-        notifications.push(
-          notifyUser(selectedReport.reported_user_id, {
-            type: resolution,
-            message: `Your account has received a ${resolution} due to ${violationType} violation.`
-          })
-        );
-      }
-
-      await Promise.all(notifications);
-
-      setShowDetailModal(false);
-      await fetchReports();
-      
-      alert(`✅ Report has been marked as ${resolution}`);
-      
-    } catch (error) {
-      console.error('❌ Error resolving report:', error);
-      alert('Failed to resolve report. Please try again.');
-    }
-  };
+    // ✅ 1. Update the report
+    await updateReportStatus(reportId, statusData);
+    
+    // ✅ 2. Close the modal
+    setShowDetailModal(false);
+    
+    // ✅ 3. Wait for backend to complete all operations (500ms)
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // ✅ 4. Refresh the reports list
+    await fetchReports();
+    
+    // ✅ 5. Show success message
+    alert(`✅ Report has been marked as ${resolution}`);
+    
+  } catch (error) {
+    console.error('❌ Error resolving report:', error);
+    alert('Failed to resolve report. Please try again.');
+  }
+};
 
   const getStatusBadgeClass = (status) => {
     switch(status) {
@@ -546,7 +644,7 @@ export default function UserReports() {
             ) : (
               <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '500px' }}>
                 <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Reported User</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Reporter</th>

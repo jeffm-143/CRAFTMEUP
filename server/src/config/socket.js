@@ -1,4 +1,5 @@
 const socketIO = require('socket.io');
+const pool = require('./database'); // ✅ Import database to check user role
 
 const activeUsers = {};
 let io = null;
@@ -18,49 +19,81 @@ const initializeSocket = (server) => {
   io.on('connection', (socket) => {
     console.log('🔌 New user connected:', socket.id);
 
-    socket.on('user-online', (userId) => {
-      if (!userId) {
-        console.error('❌ user-online received without userId');
-        return;
-      }
-      activeUsers[userId] = socket.id;
-      console.log('🟢 User online:', userId);
-
-      socket.join(`user-${userId}`);
-
-        console.log('🟢 User online:', userId, 'in room:', `user-${userId}`);
-     console.log('📊 Active users:', Object.keys(activeUsers).length);
-    });
-
-
-socket.on('booking-created', (data) => {
-  console.log('📝 Booking created event received:', data);
-  console.log('📝 Booking will be sent to tutor:', data.providerId);
-  
-  if (!data.providerId) {
-    console.error('❌ booking-created received without providerId');
+socket.on('user-online', async (userIdOrName) => {
+  if (!userIdOrName) {
+    console.error('❌ user-online received without userId or name');
     return;
   }
-  
-  // ✅ Send ONLY to the tutor's room
-  io.to(`user-${data.providerId}`).emit('booking-created', {
-    bookingId: data.bookingId,
-    userId: data.userId,
-    providerId: data.providerId,
-    status: data.status,
-    learnerName: data.learnerName,
-    price: data.price,
-    timestamp: new Date()
-  });
-  
-  console.log('✅ booking-created event emitted to tutor room:', `user-${data.providerId}`);
+
+  // Add user to active users list
+  activeUsers[userIdOrName] = socket.id;
+  console.log('🟢 User online:', userIdOrName);
+
+  // Join personal room
+  socket.join(`user-${userIdOrName}`);
+  console.log(`✅ User ${userIdOrName} joined room: user-${userIdOrName}`);
+
+  // Check if user is admin
+  try {
+    let userRows;
+
+    // Determine if userIdOrName is numeric
+    if (!isNaN(userIdOrName)) {
+      // Query by numeric ID
+      [userRows] = await pool.execute(
+        'SELECT id, name FROM admin WHERE id = ?',
+        [userIdOrName]
+      );
+    } else {
+      // Query by name (string)
+      [userRows] = await pool.execute(
+        'SELECT id, name FROM admin WHERE name = ?',
+        [userIdOrName]
+      );
+    }
+
+    if (userRows.length > 0) {
+      // Join admin-room
+      socket.join('admin-room');
+      console.log(`👑 Admin ${userRows[0].name} joined admin-room`);
+    }
+  } catch (error) {
+    console.error('❌ Error checking admin role:', error);
+  }
+
+  console.log('📊 Active users:', Object.keys(activeUsers).length);
 });
 
-      // ✅ Handle tutor request
-  socket.on('tutor-request-created', (data) => {
-    console.log('📋 Tutor request created:', data);
-    io.to(`user-${data.tutorId}`).emit('new-tutor-request', data);
-  });
+
+
+    socket.on('booking-created', (data) => {
+      console.log('📝 Booking created event received:', data);
+      console.log('📝 Booking will be sent to tutor:', data.providerId);
+      
+      if (!data.providerId) {
+        console.error('❌ booking-created received without providerId');
+        return;
+      }
+      
+      // ✅ Send ONLY to the tutor's room
+      io.to(`user-${data.providerId}`).emit('booking-created', {
+        bookingId: data.bookingId,
+        userId: data.userId,
+        providerId: data.providerId,
+        status: data.status,
+        learnerName: data.learnerName,
+        price: data.price,
+        timestamp: new Date()
+      });
+      
+      console.log('✅ booking-created event emitted to tutor room:', `user-${data.providerId}`);
+    });
+
+    // ✅ Handle tutor request
+    socket.on('tutor-request-created', (data) => {
+      console.log('📋 Tutor request created:', data);
+      io.to(`user-${data.tutorId}`).emit('new-tutor-request', data);
+    });
 
     // Transaction status changed
     socket.on('booking-status-changed', (data) => {
@@ -76,7 +109,7 @@ socket.on('booking-created', (data) => {
       });
     });
 
-        socket.on('notification-created', (data) => {
+    socket.on('notification-created', (data) => {
       console.log('🔔 Notification created event received:', data);
       
       if (!data.userId) {
@@ -95,6 +128,22 @@ socket.on('booking-created', (data) => {
       });
       
       console.log('✅ Notification broadcasted successfully');
+    });
+
+    // ✅ Handle report created event
+    socket.on('report-created', (data) => {
+      console.log('📋 Report created event received:', data);
+      
+      // Broadcast to admin room so admin dashboard updates in real-time
+      io.to('admin-room').emit('new-report', {
+        reportId: data.reportId,
+        reportedUserId: data.reportedUserId,
+        reporterUserId: data.reporterUserId,
+        reason: data.reason,
+        timestamp: data.timestamp || new Date()
+      });
+      
+      console.log('✅ new-report event broadcasted to admin-room');
     });
 
     // When a client marks a notification as read (or updates it), propagate

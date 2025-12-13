@@ -4,10 +4,13 @@ const transactionController = require('../controllers/transactionController');
 const upload = require('../middleware/upload');
 const db = require('../config/database');
 
+// ✅ EXISTING ROUTE - UNCHANGED
 router.post('/create', upload.single('paymentProof'), transactionController.createTransaction);
+
+// ✅ EXISTING ROUTE - UNCHANGED
 router.put('/:id/status', transactionController.updateTransactionStatus);
 
-// ✅ Get user transactions (both as learner and tutor) - FIXED TO USE t.amount
+// ✅ EXISTING ROUTE - UNCHANGED - Get user transactions (both as learner and tutor)
 router.get('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -48,7 +51,7 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
-// ✅ Get earnings (SC earned by tutor)
+// ✅ EXISTING ROUTE - UNCHANGED - Get earnings (SC earned by tutor)
 router.get('/earnings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -76,7 +79,7 @@ router.get('/earnings/:userId', async (req, res) => {
   }
 });
 
-// ✅ Get spent (SC spent by learner)
+// ✅ EXISTING ROUTE - UNCHANGED - Get spent (SC spent by learner)
 router.get('/spent/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -103,7 +106,7 @@ router.get('/spent/:userId', async (req, res) => {
   }
 });
 
-// ✅ Get earnings and spent for this month only (with proper net calculation)
+// ✅ EXISTING ROUTE - UNCHANGED - Get earnings and spent for this month only
 router.get('/monthly/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -183,6 +186,7 @@ router.get('/monthly/:userId', async (req, res) => {
   }
 });
 
+// ✅ EXISTING ROUTE - UNCHANGED
 router.post('/wallet/request', upload.single('proofImage'), async (req, res) => {
   try {
     const { userId, type, amount, referenceNumber, proofImage } = req.body;
@@ -227,6 +231,7 @@ router.post('/wallet/request', upload.single('proofImage'), async (req, res) => 
   }
 });
 
+// ✅ EXISTING ROUTE - UNCHANGED
 router.get('/wallet/:userId/balance', async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -251,6 +256,7 @@ router.get('/wallet/:userId/balance', async (req, res) => {
   }
 });
 
+// ✅ EXISTING ROUTE - UNCHANGED
 router.get('/wallet/requests', async (req, res) => {
   try {
     const [requests] = await db.query(`
@@ -274,92 +280,10 @@ router.get('/wallet/requests', async (req, res) => {
   }
 });
 
-router.put('/wallet/requests/:id/status', async (req, res) => {
-  try {
-    const requestId = parseInt(req.params.id, 10);
-    const { status, userId, amount, type } = req.body;
-    
-    console.log('🔄 Updating wallet request:', { requestId, status, userId, amount, type });
-    
-    if (!requestId || isNaN(requestId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid request ID is required'
-      });
-    }
-    
-    // Update wallet request status
-    const [updateResult] = await db.execute(
-      'UPDATE wallet_requests SET status = ? WHERE id = ?',
-      [status, requestId]
-    );
+// ✅ MODIFIED ROUTE - Now uses the updated controller function with fee recording
+router.put('/wallet/requests/:id/status', transactionController.updateWalletRequestStatus);
 
-    console.log('Update result:', updateResult);
-
-    if (updateResult.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Request not found'
-      });
-    }
-
-    // Handle wallet balance updates
-    if (type && type !== 'none' && userId && amount) {
-      const [wallet] = await db.execute(
-        'SELECT balance FROM wallet WHERE user_id = ?',
-        [userId]
-      );
-
-      if (wallet.length === 0) {
-        // Create wallet if missing
-        await db.execute(
-          'INSERT INTO wallet (user_id, balance) VALUES (?, ?)',
-          [userId, 50.00]
-        );
-        
-        const newBalance = type === 'credit' 
-          ? 50.00 + parseFloat(amount) 
-          : Math.max(0, 50.00 - parseFloat(amount));
-        
-        await db.execute(
-          'UPDATE wallet SET balance = ? WHERE user_id = ?',
-          [newBalance, userId]
-        );
-      } else {
-        const currentBalance = parseFloat(wallet[0].balance);
-        const updateAmount = type === 'credit' ? parseFloat(amount) : -parseFloat(amount);
-        const newBalance = currentBalance + updateAmount;
-
-        if (type === 'debit' && newBalance < 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Insufficient balance for cash-out'
-          });
-        }
-
-        await db.execute(
-          'UPDATE wallet SET balance = ? WHERE user_id = ?',
-          [newBalance, userId]
-        );
-      }
-
-      console.log(`✅ Wallet updated: ${type} ${amount} SC for user ${userId}`);
-    }
-
-    res.json({ 
-      success: true,
-      message: 'Request status updated successfully'
-    });
-
-  } catch (error) {
-    console.error('Error updating wallet request:', error);
-    res.status(500).json({ 
-      success: false,
-      message: error.message || 'Failed to update request status'
-    });
-  }
-});
-
+// ✅ EXISTING ROUTE - UNCHANGED
 router.get('/wallet/history/:userId', async (req, res) => {
   try {
     const [transactions] = await db.query(
@@ -372,5 +296,11 @@ router.get('/wallet/history/:userId', async (req, res) => {
     res.status(500).json({ error: 'Failed to get wallet history' });
   }
 });
+
+// ✅ NEW ROUTE - Get revenue statistics for admin dashboard
+router.get('/revenue/stats', transactionController.getRevenueStats);
+
+// ✅ NEW ROUTE - Get detailed revenue transactions
+router.get('/revenue/transactions', transactionController.getRevenueTransactions);
 
 module.exports = router;

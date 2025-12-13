@@ -85,7 +85,7 @@ const parseAvailability = (availability) => {
 };
 
 // Feedback Modal Component
-function FeedbackModal({ service, onClose }) {
+function FeedbackModal({ service, onClose, verificationStatus }) {
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -139,26 +139,27 @@ function FeedbackModal({ service, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      {/* YELLOW ALERT HERE */}
-    {verificationStatus !== "approved" && (
-      <div className="w-full max-w-2xl mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm text-yellow-700 font-medium">Account Verification Required</p>
-            <p className="text-sm text-yellow-600 mt-1">
-              Your account is currently <span className="font-semibold">{verificationStatus}</span>.  
-              You cannot book services until an administrator verifies your account.
-            </p>
-          </div>
-        </div>
-      </div>
-    )}
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        {/* YELLOW ALERT - NOW CORRECTLY PLACED */}
+        {verificationStatus !== "approved" && (
+          <div className="w-full p-4 bg-yellow-50 border-l-4 border-yellow-400">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700 font-medium">Account Verification Required</p>
+                <p className="text-sm text-yellow-600 mt-1">
+                  Your account is currently <span className="font-semibold">{verificationStatus}</span>.  
+                  You cannot book services until an administrator verifies your account.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sm:p-6 flex justify-between items-center">
           <div>
@@ -307,7 +308,6 @@ function FeedbackModal({ service, onClose }) {
           </button>
         </div>
       </div>
-      
     </div>
   );
 }
@@ -1101,12 +1101,13 @@ if (verificationStatus !== 'approved') {
       )}
 
       {/* Feedback Modal */}
-      {selectedFeedbackService && (
-        <FeedbackModal 
-          service={selectedFeedbackService} 
-          onClose={() => setSelectedFeedbackService(null)} 
-        />
-      )}
+    {selectedFeedbackService && (
+      <FeedbackModal 
+        service={selectedFeedbackService} 
+        onClose={() => setSelectedFeedbackService(null)}
+        verificationStatus={verificationStatus}  // ADD THIS LINE
+      />
+    )}
       {/* Verification Alert Modal - ADD THIS HERE */}
     {showVerificationAlert && (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">

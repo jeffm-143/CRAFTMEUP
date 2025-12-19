@@ -665,4 +665,9 @@ export const getRevenueTransactions = async (page = 1, limit = 20, type = null, 
   }
 };
 
+export const getUserStatus = async (userId) => {
+  const response = await api.get(`/services/user/status/${userId}`);
+  return response.data;
+};
+
 export default api;

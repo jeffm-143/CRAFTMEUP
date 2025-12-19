@@ -3,35 +3,41 @@ const { getIO } = require('../config/socket');
 
 exports.createNotification = async (req, res) => {
   try {
-    const { userId, type, title, content } = req.body;
+    const { userId, type, title, content, dismissible } = req.body;
     
     const [result] = await db.query(
-      'INSERT INTO notifications (user_id, type, title, content, `read`) VALUES (?, ?, ?, ?, ?)',
-      [userId, type, title, content, false]
+      'INSERT INTO notifications (user_id, type, title, content, `read`, dismissible) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, type, title, content, false, dismissible || false]
     );
+    
+    const notification = {
+      id: result.insertId,
+      user_id: userId,
+      type,
+      title,
+      content,
+      read: false,
+      dismissible: dismissible || false,
+      created_at: new Date()
+    };
     
     res.status(201).json({
       success: true,
-      notification: {
-        id: result.insertId,
-        user_id: userId,
-        type,
-        title,
-        content,
-        read: false,
-        created_at: new Date()
-      }
+      notification
     });
     
-    // Emit real-time event to the user's room
+    // ✅ Emit MULTIPLE socket events for better compatibility
     try {
       const io = getIO();
-      io.to(`user-${userId}`).emit('new-notification', {
-        type,
-        title,
-        content,
-        timestamp: new Date()
-      });
+      
+      // Emit to user's room
+      io.to(`user-${userId}`).emit('new-notification', notification);
+      
+      // ✅ ALSO emit notification-created for consistency
+      io.to(`user-${userId}`).emit('notification-created', notification);
+      
+      // ✅ Log for debugging
+      console.log(`📢 Notification emitted to user-${userId}:`, { type, title });
     } catch (emitErr) {
       console.warn('Socket.IO not initialized or emit failed:', emitErr.message || emitErr);
     }
@@ -89,7 +95,6 @@ exports.markAllAsRead = async (req, res) => {
   }
 };
 
-
 exports.createFeedbackNotification = async (req, res) => {
   try {
     const { tutorId, learnerName, comment, rating } = req.body;
@@ -112,24 +117,24 @@ exports.createFeedbackNotification = async (req, res) => {
       ]
     );
     
+    const notification = {
+      id: result.insertId,
+      ...notificationData,
+      read: false,
+      created_at: new Date()
+    };
+    
     res.status(201).json({
       success: true,
-      notification: {
-        id: result.insertId,
-        ...notificationData,
-        read: false,
-        created_at: new Date()
-      }
+      notification
     });
-    // Emit real-time event to the tutor's room
+    
+    // ✅ Emit MULTIPLE socket events
     try {
       const io = getIO();
-      io.to(`user-${tutorId}`).emit('new-notification', {
-        type: notificationData.type,
-        title: notificationData.title,
-        content: notificationData.content,
-        timestamp: new Date()
-      });
+      io.to(`user-${tutorId}`).emit('new-notification', notification);
+      io.to(`user-${tutorId}`).emit('notification-created', notification);
+      console.log(`📢 Feedback notification emitted to user-${tutorId}`);
     } catch (emitErr) {
       console.warn('Socket.IO emit failed for feedback notification:', emitErr.message || emitErr);
     }
@@ -143,7 +148,6 @@ exports.createTutorRequestNotification = async (req, res) => {
   try {
     const { tutorId, learnerName } = req.body;
     
-    // Validate input
     if (!tutorId || !learnerName) {
       return res.status(400).json({
         success: false,
@@ -169,24 +173,24 @@ exports.createTutorRequestNotification = async (req, res) => {
       ]
     );
     
+    const notification = {
+      id: result.insertId,
+      ...notificationData,
+      read: false,
+      created_at: new Date()
+    };
+    
     res.status(201).json({
       success: true,
-      notification: {
-        id: result.insertId,
-        ...notificationData,
-        read: false,
-        created_at: new Date()
-      }
+      notification
     });
-    // Emit real-time event to the tutor's room
+    
+    // ✅ Emit MULTIPLE socket events
     try {
       const io = getIO();
-      io.to(`user-${tutorId}`).emit('new-notification', {
-        type: notificationData.type,
-        title: notificationData.title,
-        content: notificationData.content,
-        timestamp: new Date()
-      });
+      io.to(`user-${tutorId}`).emit('new-notification', notification);
+      io.to(`user-${tutorId}`).emit('notification-created', notification);
+      console.log(`📢 Tutor request notification emitted to user-${tutorId}`);
     } catch (emitErr) {
       console.warn('Socket.IO emit failed for tutor request notification:', emitErr.message || emitErr);
     }

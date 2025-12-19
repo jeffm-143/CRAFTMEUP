@@ -416,7 +416,7 @@ export default function Dashboard() {
 
     // Listen for services
     socket.on('service-created', (newService) => {
-      console.log('✨ New service created:', newService);
+      console.log('✨ New class created:', newService);
       if (newService.user_id === userData.id) {
         setServices(prev => [newService, ...prev]);
       } else {
@@ -833,7 +833,7 @@ export default function Dashboard() {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+        { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
         { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -847,7 +847,7 @@ export default function Dashboard() {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
+        { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
         { name: "Feedbacks & Ratings", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
@@ -859,8 +859,8 @@ export default function Dashboard() {
       { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
       { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
       { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-      { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
-      { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+      { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
+      { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
       { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
       { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
       { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -1044,7 +1044,7 @@ export default function Dashboard() {
           </h2>
           {recommendedServices.length > 0 && (
             <button
-              onClick={() => navigate('/find-services')}
+              onClick={() => navigate('/find-classes')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
             >
               View All →
@@ -1058,7 +1058,7 @@ export default function Dashboard() {
             <p className="text-gray-500 font-medium">No recommendations yet</p>
             <p className="text-xs text-gray-400 mt-1 mb-4">Explore services to get personalized recommendations</p>
             <button
-              onClick={() => navigate('/find-services')}
+              onClick={() => navigate('/find-classes')}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
             >
               Browse Services
@@ -1189,9 +1189,9 @@ export default function Dashboard() {
     return (
       <div className="p-4 mx-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-          <span className="font-semibold text-lg">My Services</span>
+          <span className="font-semibold text-lg">My Classes</span>
           <button
-            onClick={() => navigate('/my-services')}
+            onClick={() => navigate('/my-classes')}
             className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-full text-sm hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
           >
             <PlusIcon className="h-4 w-4 mr-1" /> Add New
@@ -1259,9 +1259,9 @@ export default function Dashboard() {
             ))
           ) : (
             <div className="text-center py-8 bg-gray-50 rounded-2xl">
-              <p className="text-gray-500 text-sm">No services found</p>
+              <p className="text-gray-500 text-sm">No classes found</p>
               <button
-                onClick={() => navigate("/my-services")}
+                onClick={() => navigate("/my-classes")}
                 className="mt-2 text-blue-600 hover:text-blue-700 text-sm"
               >
                 Create your first service
@@ -1465,7 +1465,7 @@ export default function Dashboard() {
         {/* Recommendations for Learners */}
         {renderRecommendations()}
 
-        {/* My Services */}
+        {/* My Classes */}
         {renderServices()}
 
         <div className="h-4 sm:h-6"></div>

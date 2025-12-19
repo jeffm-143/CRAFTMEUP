@@ -18,7 +18,7 @@ import {
   StarIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
-import { getAllServices, createBooking, bookmarkService, unbookmarkService, getSavedServices, getNotifications } from "../../../services/api";
+import { getAllServices, createBooking, bookmarkService, unbookmarkService, getSavedServices, getNotifications, getUserStatus } from "../../../services/api";
 import io from "socket.io-client";
 
 // Star Rating Display Component
@@ -153,7 +153,7 @@ function FeedbackModal({ service, onClose, verificationStatus }) {
                 <p className="text-sm text-yellow-700 font-medium">Account Verification Required</p>
                 <p className="text-sm text-yellow-600 mt-1">
                   Your account is currently <span className="font-semibold">{verificationStatus}</span>.  
-                  You cannot book services until an administrator verifies your account.
+                  You cannot book classes until an administrator verifies your account.
                 </p>
               </div>
             </div>
@@ -478,7 +478,7 @@ const FindServices = () => {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+        { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
         { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -492,7 +492,7 @@ const FindServices = () => {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
+        { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
         { name: "Past Feedbacks", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
@@ -504,8 +504,8 @@ const FindServices = () => {
       { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
       { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
       { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-      { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
-      { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+      { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
+      { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
       { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
       { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
       { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -605,16 +605,36 @@ const FindServices = () => {
     }
   };
 
-  useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUserData(storedUser);
-    setVerificationStatus(storedUser?.verification_status?.toLowerCase());
-
-    if (storedUser?.role?.toLowerCase() === 'tutor') {
-      navigate('/dashboard');
-      return;
+useEffect(() => {
+  const loadUserData = async () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      setUserData(storedUser);
+      
+      // Fetch CURRENT verification status from backend
+      if (storedUser?.id) {
+        const status = await getUserStatus(storedUser.id);
+        const currentStatus = status.verification_status?.toLowerCase();
+        setVerificationStatus(currentStatus);
+        
+        // Update localStorage with current status
+        const updatedUser = {
+          ...storedUser,
+          verification_status: status.verification_status,
+          role: status.role
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Error fetching user status:', error);
+      // Fallback to localStorage if API fails
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      setVerificationStatus(storedUser?.verification_status?.toLowerCase());
     }
-  }, [navigate]);
+  };
+
+  loadUserData();
+}, []);
 
   // Initialize Socket.IO Connection
   useEffect(() => {
@@ -629,10 +649,25 @@ const FindServices = () => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Find Services: Connected to WebSocket');
+      console.log('✅ Find Classes: Connected to WebSocket');
       const user = JSON.parse(localStorage.getItem('user'));
       if (user?.id) {
         socket.emit('user-online', user.id);
+      }
+    });
+
+      socket.on('verification-status-updated', (data) => {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (user?.id && data.userId === user.id) {
+        console.log('✅ Verification status updated:', data.verification_status);
+        setVerificationStatus(data.verification_status.toLowerCase());
+        
+        // Update localStorage
+        const updatedUser = { 
+          ...user, 
+          verification_status: data.verification_status 
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
       }
     });
 
@@ -647,7 +682,7 @@ const FindServices = () => {
     });
 
     socket.on('service-created', (newService) => {
-      console.log('✨ New service created:', newService);
+      console.log('✨ New class created:', newService);
       
       const user = JSON.parse(localStorage.getItem('user'));
       if (newService.user_id !== user.id) {
@@ -665,7 +700,7 @@ const FindServices = () => {
     
     // LISTEN FOR BOOKMARK ADDED
     socket.on('bookmark-service-added', (data) => {
-      console.log('📌 Find Services: Bookmark added detected:', data);
+      console.log('📌 Find Classes: Bookmark added detected:', data);
       if (userData?.id === data.userId) {
         // Add to bookmarked services
         setBookmarkedServices(prev => new Set(prev).add(data.serviceId));
@@ -675,7 +710,7 @@ const FindServices = () => {
 
     // LISTEN FOR BOOKMARK REMOVED
     socket.on('bookmark-service-removed', (data) => {
-      console.log('🗑️ Find Services: Bookmark removed detected:', data);
+      console.log('🗑️ Find Classes: Bookmark removed detected:', data);
       if (userData?.id === data.userId) {
         // Remove from bookmarked services
         setBookmarkedServices(prev => {
@@ -688,7 +723,7 @@ const FindServices = () => {
     });
 
     socket.on('disconnect', () => {
-      console.log('❌ Find Services: Disconnected from WebSocket');
+      console.log('❌ Find Classes: Disconnected from WebSocket');
     });
 
     socket.on('error', (error) => {
@@ -915,7 +950,7 @@ if (verificationStatus !== 'approved') {
               >
                 <Bars3Icon className="h-6 w-6" />
               </button>
-              <h1 className="text-lg sm:text-xl font-semibold truncate">Browse Services</h1>
+              <h1 className="text-lg sm:text-xl font-semibold truncate">Browse Class</h1>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button 
@@ -945,7 +980,7 @@ if (verificationStatus !== 'approved') {
               type="text" 
               value={searchTerm} 
               onChange={handleSearch} 
-              placeholder="Search services..." 
+              placeholder="Search classes..." 
               className="bg-transparent outline-none ml-2 text-sm w-full text-white placeholder-white/70"
             />
           </div>

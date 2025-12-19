@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import io from "socket.io-client";
 import {
   HomeIcon,
   UserIcon,
@@ -26,6 +27,7 @@ import {
   deleteService,
   getNotifications,
   getWalletBalance,
+  getUserStatus,
 } from "../../../services/api";
 import Toast from "../../common/Toast";
 
@@ -116,7 +118,7 @@ export default function MyServices() {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+        { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
         { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -130,7 +132,7 @@ export default function MyServices() {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
+        { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
         { name: "Feedbacks & Ratings", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
@@ -143,8 +145,8 @@ export default function MyServices() {
       { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
       { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
       { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-      { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
-      { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+      { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
+      { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
       { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
       { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
       { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -173,11 +175,72 @@ export default function MyServices() {
     return [];
   };
 
-  useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUserData(storedUser);
-    setVerificationStatus(storedUser?.verification_status?.toLowerCase());
-  }, []);
+  // Add this NEW useEffect for Socket.IO in MyServices.jsx
+useEffect(() => {
+  const socket = io('http://localhost:5000', {
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+  });
+
+  socket.on('connect', () => {
+    console.log('✅ MyServices: Connected to WebSocket');
+  });
+
+  socket.on('verification-status-updated', (data) => {
+    console.log('🔔 Verification status update received:', data);
+    if (userData?.id === data.userId) {
+      setVerificationStatus(data.verification_status.toLowerCase());
+      
+      // Update localStorage
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      const updatedUser = { 
+        ...storedUser, 
+        verification_status: data.verification_status 
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      console.log('✅ Verification status updated to:', data.verification_status);
+      
+      // Refresh services if now approved
+      if (data.verification_status.toLowerCase() === 'approved') {
+        fetchUserServices();
+      }
+    }
+  });
+
+  return () => socket.disconnect();
+}, [userData]);
+
+useEffect(() => {
+  const loadUserData = async () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      setUserData(storedUser);
+      
+      // Fetch CURRENT verification status from backend
+      if (storedUser?.id) {
+        const status = await getUserStatus(storedUser.id);
+        const currentStatus = status.verification_status?.toLowerCase();
+        setVerificationStatus(currentStatus);
+        
+        // Update localStorage with current status
+        const updatedUser = {
+          ...storedUser,
+          verification_status: status.verification_status,
+          role: status.role
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Error fetching user status:', error);
+      // Fallback to localStorage if API fails
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      setVerificationStatus(storedUser?.verification_status?.toLowerCase());
+    }
+  };
+
+  loadUserData();
+}, []);
 
   // Fetch wallet balance when the modal opens (if tutor/both)
   useEffect(() => {
@@ -299,7 +362,7 @@ const fetchUserServices = async () => {
   };
 
   const handleDelete = async (serviceId) => {
-    if (window.confirm("Are you sure you want to delete this service?")) {
+    if (window.confirm("Are you sure you want to delete this class?")) {
       try {
         await deleteService(serviceId);
         fetchUserServices();
@@ -416,7 +479,7 @@ const fetchUserServices = async () => {
         await createService(serviceData);
         
         setToast({
-          message: "Service created successfully!",
+          message: "Class created successfully!",
           type: "success",
           isLoading: false,
           showProgress: true,
@@ -462,7 +525,7 @@ const fetchUserServices = async () => {
         <div className="p-4 sm:p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white sticky top-0 z-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg sm:text-xl font-semibold">
-              {editingService ? "Edit Service" : "Add New Service"}
+              {editingService ? "Edit Class" : "Add New Class"}
             </h2>
             {(!editingService && (role === 'tutor' || role === 'both')) && (
               <div className="text-sm text-white/100 mr-3">
@@ -507,7 +570,7 @@ const fetchUserServices = async () => {
           <div className="max-w-2xl mx-auto w-full px-4 py-4 sm:py-6">
             <form onSubmit={handleCreateOrUpdate} className="space-y-4 sm:space-y-6">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Service Title</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Class Title</label>
                 <input
                   type="text"
                   value={newService.title}
@@ -753,7 +816,7 @@ const fetchUserServices = async () => {
               >
                 <Bars3Icon className="h-6 w-6" />
               </button>
-              <h1 className="text-lg sm:text-xl font-semibold truncate">My Services</h1>
+              <h1 className="text-lg sm:text-xl font-semibold truncate">My Class</h1>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button 
@@ -781,7 +844,7 @@ const fetchUserServices = async () => {
                 }}
                 className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-2 rounded-lg text-xs sm:text-sm hover:bg-white/20 transition-all"
               >
-                <PlusIcon className="h-4 w-4" /> Add Service
+                <PlusIcon className="h-4 w-4" /> Add Class
               </button>
               {/* ✅ MOBILE BUTTON WITH VERIFICATION CHECK */}
               <button
@@ -821,7 +884,7 @@ const fetchUserServices = async () => {
                   Account Verification Required
                 </p>
                 <p className="text-sm text-yellow-600 mt-1">
-                  Your account is currently <span className="font-semibold">{verificationStatus}</span>. You cannot create services until an administrator verifies your account.
+                  Your account is currently <span className="font-semibold">{verificationStatus}</span>. You cannot create classes until an administrator verifies your account.
                 </p>
               </div>
             </div>
@@ -837,12 +900,12 @@ const fetchUserServices = async () => {
       {services.length === 0 ? (
         <div className="col-span-full text-center py-12 sm:py-16">
           <ClipboardDocumentListIcon className="h-12 sm:h-16 w-12 sm:w-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-sm sm:text-base mb-4">No services created yet</p>
+          <p className="text-gray-500 text-sm sm:text-base mb-4">No classes created yet</p>
           <button
             onClick={() => setShowServiceModal(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
           >
-            Create Your First Service
+            Create Your First Class
           </button>
         </div>
       ) : (

@@ -416,6 +416,13 @@ const lineOptions = {
 
 const handleViewDetails = async (activity) => {
   try {
+    // ✅ ADD DEBUG LOG
+    console.log('🔍 Activity object:', {
+      related_id: activity.related_id,
+      activity_type: activity.activity_type,
+      full_activity: activity
+    });
+
     const response = await api.get(`/admin/activities/${activity.related_id}?type=${encodeURIComponent(activity.activity_type)}`);
     
     console.log('📸 Raw response data:', response.data.data);
@@ -438,14 +445,13 @@ const handleViewDetails = async (activity) => {
         user_id: activity.user_id,
         activity_type: activity.activity_type,
         status: activity.status,
-        student_id_file: convertImage(response.data.data.student_id_file),
-        study_load_file: convertImage(response.data.data.study_load_file),
+        // ✅ CHANGED: Only convert valid_id_file (matches backend)
+        valid_id_file: convertImage(response.data.data.valid_id_file),
         proof_image: convertImage(response.data.data.proof_image)
       };
       
       console.log('📸 Converted images:', {
-        student_id: !!detailedActivity.student_id_file,
-        study_load: !!detailedActivity.study_load_file,
+        valid_id: !!detailedActivity.valid_id_file,
         proof: !!detailedActivity.proof_image
       });
       
@@ -541,7 +547,7 @@ const handleViewDetails = async (activity) => {
 
   const getActivityTypeColor = (type) => {
     const colors = {
-      'Service Created': 'bg-blue-100 text-blue-800',
+      'Class Created': 'bg-blue-100 text-blue-800',
       'Transaction': 'bg-green-100 text-green-800',
       'Wallet Request': 'bg-yellow-100 text-yellow-800',
       'Report Submitted': 'bg-red-100 text-red-800',
@@ -882,9 +888,9 @@ const handleViewDetails = async (activity) => {
               <div className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-xs font-semibold">Services</p>
+                    <p className="text-gray-600 text-xs font-semibold">Classes</p>
                     <p className="text-2xl font-bold text-blue-600 mt-1">
-                      {stats.activitiesByType?.find(a => a.activity_type === 'Service Created')?.count || 0}
+                      {stats.activitiesByType?.find(a => a.activity_type === 'Class Created')?.count || 0}
                     </p>
                   </div>
                   <FaCheck className="text-blue-500 text-xl" />
@@ -1013,7 +1019,7 @@ const handleViewDetails = async (activity) => {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
               >
                 <option value="all">All Activities</option>
-                <option value="Service Created">Service Created</option>
+                <option value="Class Created">Class Created</option>
                 <option value="Transaction">Transaction</option>
                 <option value="Wallet Request">Wallet Request</option>
                 <option value="Report Submitted">Report Submitted</option>
@@ -1520,8 +1526,8 @@ const handleViewDetails = async (activity) => {
   </>
 )}
 
- {/* SERVICE CREATED CONTENT */}
-  {selectedActivity.activity_type === 'Service Created' && (
+ {/* CLASS CREATED CONTENT */}
+  {selectedActivity.activity_type === 'Class Created' && (
     <>
       <div className="mb-8">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -1538,10 +1544,10 @@ const handleViewDetails = async (activity) => {
       <div className="mb-8">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           <div className="w-1 h-6 bg-indigo-600 rounded"></div>
-          Service Information
+          Class Information
         </h3>
         <div className="space-y-4">
-          {renderDetailCard(<FaTag className="text-indigo-600" />, 'Service Title', selectedActivity.title, true)}
+          {renderDetailCard(<FaTag className="text-indigo-600" />, 'Class Title', selectedActivity.title, true)}
           <div className="p-4 rounded-lg bg-indigo-50 border-2 border-indigo-200">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">📝 Description</p>
             <p className="text-sm text-gray-900 leading-relaxed">{selectedActivity.description || 'N/A'}</p>
@@ -1552,7 +1558,7 @@ const handleViewDetails = async (activity) => {
           </div>
           {/* Status Display with Date */}
           <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-5 rounded-xl border-2 border-gray-200">
-            <h4 className="font-bold text-gray-900 mb-3">Service Status</h4>
+            <h4 className="font-bold text-gray-900 mb-3">Class Status</h4>
             <div className="flex items-center gap-3">
               <span className={`px-4 py-2 rounded-full text-sm font-bold ${
                 selectedActivity.status === 'Active'
@@ -1574,7 +1580,7 @@ const handleViewDetails = async (activity) => {
       {/* ℹ️ INFO MESSAGE - No actions needed */}
       <div className="mt-6 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
         <p className="text-sm text-blue-700">
-          <span className="font-semibold">ℹ️ Info:</span> This service was created by the user and does not require admin approval. It is automatically listed in the marketplace.
+          <span className="font-semibold">ℹ️ Info:</span> This class was created by the user and does not require admin approval. It is automatically listed in the marketplace.
         </p>
       </div>
     </>
@@ -1613,15 +1619,15 @@ const handleViewDetails = async (activity) => {
         </div>
       </div>
 
-      {/* Service Details */}
+      {/* Class Details */}
       <div className="mb-8">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           <div className="w-1 h-6 bg-indigo-600 rounded"></div>
-          Service Details
+          Class Details
         </h3>
         <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-6 border border-indigo-200">
           <div className="mb-4">
-            {renderDetailCard(<FaTag className="text-indigo-600" />, 'Service Title', selectedActivity.service_title, true)}
+            {renderDetailCard(<FaTag className="text-indigo-600" />, 'Class Title', selectedActivity.service_title, true)}
           </div>
           <div className="mb-4">
             <div className="p-4 rounded-lg bg-white border-2 border-indigo-200">
@@ -1660,92 +1666,83 @@ const handleViewDetails = async (activity) => {
     </>
   )}
 
-  {/* USER REGISTERED CONTENT */}
-  {selectedActivity.activity_type === 'User Registered' && (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {/* User Information */}
-      <div className="space-y-4">
-        <h3 className="font-semibold text-lg text-gray-800 mb-4">User Information</h3>
-        
-        <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-          <div>
-            <label className="text-xs text-gray-500 font-medium uppercase">Full Name</label>
-            <p className="font-medium text-gray-800 mt-1">{selectedActivity.full_name}</p>
-          </div>
-          
-          <div>
-            <label className="text-xs text-gray-500 font-medium uppercase">Email</label>
-            <p className="font-medium text-gray-800 mt-1">{selectedActivity.email}</p>
-          </div>
-          
-          <div>
-            <label className="text-xs text-gray-500 font-medium uppercase">Course</label>
-            <p className="font-medium text-gray-800 mt-1">{selectedActivity.course}</p>
-          </div>
-          
-          <div>
-            <label className="text-xs text-gray-500 font-medium uppercase">Year Level</label>
-            <p className="font-medium text-gray-800 mt-1">{selectedActivity.year}</p>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500 font-medium uppercase">Role</label>
-            <p className={`font-medium mt-1 px-3 py-1 rounded-full text-sm w-fit ${
-              selectedActivity.role === "Learner"
-                ? "bg-blue-100 text-blue-700"
-                : selectedActivity.role === "Tutor"
-                ? "bg-purple-100 text-purple-700"
-                : "bg-green-100 text-green-700"
-            }`}>
-              {selectedActivity.role}
-            </p>
-          </div>
+{/* USER REGISTERED CONTENT */}
+{selectedActivity.activity_type === 'User Registered' && (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {/* User Information */}
+    <div className="space-y-4">
+      <h3 className="font-semibold text-lg text-gray-800 mb-4">User Information</h3>
+      
+      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+        <div>
+          <label className="text-xs text-gray-500 font-medium uppercase">Full Name</label>
+          <p className="font-medium text-gray-800 mt-1">{selectedActivity.full_name}</p>
         </div>
-      </div>
-
-{/* Documents */}
-      <div className="space-y-4">
-        <h3 className="font-semibold text-lg text-gray-800 mb-4">Submitted Documents</h3>
         
         <div>
-          <label className="text-sm text-gray-600 font-medium mb-2 block">Student ID</label>
-          {selectedActivity.student_id_file ? (
-            <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
-              <img
-                src={selectedActivity.student_id_file}
-                alt="Student ID"
-                className="w-full object-contain max-h-48 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setImagePreview(selectedActivity.student_id_file)}
-              />
-            </div>
-          ) : (
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-              <p className="text-gray-500 text-sm">No file uploaded</p>
-            </div>
-          )}
+          <label className="text-xs text-gray-500 font-medium uppercase">Email</label>
+          <p className="font-medium text-gray-800 mt-1">{selectedActivity.email}</p>
         </div>
 
         <div>
-          <label className="text-sm text-gray-600 font-medium mb-2 block">Study Load</label>
-          {selectedActivity.study_load_file ? (
-            <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
-              <img
-                src={selectedActivity.study_load_file}
-                alt="Study Load"
-                className="w-full object-contain max-h-48 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setImagePreview(selectedActivity.study_load_file)}
-              />
-            </div>
-          ) : (
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-              <p className="text-gray-500 text-sm">No file uploaded</p>
-            </div>
-          )}
+          <label className="text-xs text-gray-500 font-medium uppercase">Role</label>
+          <p className={`font-medium mt-1 px-3 py-1 rounded-full text-sm w-fit ${
+            selectedActivity.role === "Learner"
+              ? "bg-blue-100 text-blue-700"
+              : selectedActivity.role === "Tutor"
+              ? "bg-purple-100 text-purple-700"
+              : "bg-green-100 text-green-700"
+          }`}>
+            {selectedActivity.role}
+          </p>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 font-medium uppercase">Verification Status</label>
+          <p className={`font-medium mt-1 px-3 py-1 rounded-full text-sm w-fit ${
+            selectedActivity.verification_status === "approved"
+              ? "bg-green-100 text-green-700"
+              : selectedActivity.verification_status === "rejected"
+              ? "bg-red-100 text-red-700"
+              : "bg-yellow-100 text-yellow-700"
+          }`}>
+            {selectedActivity.verification_status}
+          </p>
         </div>
       </div>
     </div>
-  )}
-</div>
+
+          {/* Documents */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg text-gray-800 mb-4">Submitted Documents</h3>
+            
+            <div>
+              <label className="text-sm text-gray-600 font-medium mb-2 block">Valid ID</label>
+              {selectedActivity.valid_id_file ? (
+                <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
+                  <img
+                    src={selectedActivity.valid_id_file.startsWith('data:') 
+                      ? selectedActivity.valid_id_file 
+                      : `data:image/jpeg;base64,${selectedActivity.valid_id_file}`}
+                    alt="Valid ID"
+                    className="w-full object-contain max-h-64 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => setImagePreview(
+                      selectedActivity.valid_id_file.startsWith('data:') 
+                        ? selectedActivity.valid_id_file 
+                        : `data:image/jpeg;base64,${selectedActivity.valid_id_file}`
+                    )}
+                  />
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
+                  <p className="text-gray-500 text-sm">No file uploaded</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+  </div>
 
       {/* Action Buttons */}
       {!isResolved && selectedActivity && (

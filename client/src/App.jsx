@@ -33,8 +33,8 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/messages" element={<Messages />} />
-        <Route path="/my-services" element={<MyServices />} />
-        <Route path="/find-services" element={<FindServices />} />
+        <Route path="/my-classes" element={<MyServices />} />
+        <Route path="/find-classes" element={<FindServices />} />
         <Route path="/saved" element={<Saved />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/transactions" element={<Transaction />} />

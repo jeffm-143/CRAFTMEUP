@@ -3,10 +3,75 @@ import {
   ArrowLeftIcon,
   ExclamationTriangleIcon,
   XMarkIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate, useParams } from "react-router-dom";
 
 const API_URL = 'http://localhost:5000';
+
+// ✅ Enhanced Toast Component with Progress Bar
+const Toast = ({ message, type = 'success', onClose }) => {
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    const duration = 3000; // 3 seconds
+    const interval = 10; // Update every 10ms
+    const decrement = (interval / duration) * 100;
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        const newProgress = prev - decrement;
+        if (newProgress <= 0) {
+          clearInterval(timer);
+          onClose();
+          return 0;
+        }
+        return newProgress;
+      });
+    }, interval);
+
+    return () => clearInterval(timer);
+  }, [onClose]);
+
+  const getStyles = () => {
+    if (type === 'success') {
+      return {
+        bg: 'bg-gradient-to-r from-green-500 to-green-600',
+        progressBg: 'bg-green-300',
+        icon: <CheckCircleIcon className="h-5 w-5 text-white" />
+      };
+    }
+    return {
+      bg: 'bg-gradient-to-r from-red-500 to-red-600',
+      progressBg: 'bg-red-300',
+      icon: <XMarkIcon className="h-5 w-5 text-white" />
+    };
+  };
+
+  const styles = getStyles();
+
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-slideIn">
+      <div className={`${styles.bg} text-white px-5 py-3.5 rounded-xl shadow-2xl min-w-[300px] max-w-md overflow-hidden`}>
+        <div className="flex items-center gap-3 mb-2">
+          {styles.icon}
+          <p className="font-semibold text-sm flex-1">{message}</p>
+          <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+          <div 
+            className={`h-full ${styles.progressBg} transition-all duration-100 ease-linear`}
+            style={{ width: `${progress}%` }}
+          ></div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ProviderProfile = () => {
   const navigate = useNavigate();
@@ -21,6 +86,7 @@ const ProviderProfile = () => {
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [toast, setToast] = useState(null); // ✅ Toast state
 
   useEffect(() => {
     fetchProviderData();
@@ -49,7 +115,7 @@ const ProviderProfile = () => {
     }
   };
 
-const handleReportSubmit = async (e) => {
+  const handleReportSubmit = async (e) => {
     e.preventDefault();
     
     // Trim and validate
@@ -57,14 +123,14 @@ const handleReportSubmit = async (e) => {
     const trimmedDescription = reportDescription.trim();
     
     if (!trimmedReason || !trimmedDescription) {
-      alert('Please fill in all fields');
+      setToast({ message: 'Please fill in all fields', type: 'error' });
       return;
     }
 
     try {
       setSubmittingReport(true);
       
-      // ✅ Get current user from localStorage - check multiple possible keys
+      // ✅ Get current user from localStorage
       let currentUser = null;
       const userStr = localStorage.getItem('user');
       
@@ -82,7 +148,7 @@ const handleReportSubmit = async (e) => {
       // ✅ Check if user exists and has an id
       if (!currentUser || !currentUser.id) {
         console.error('❌ No valid user found. localStorage user:', currentUser);
-        alert('Please login first to submit a report');
+        setToast({ message: 'Please login first to submit a report', type: 'error' });
         setSubmittingReport(false);
         return;
       }
@@ -106,16 +172,16 @@ const handleReportSubmit = async (e) => {
       console.log('📥 Server response:', data);
 
       if (response.ok && data.success) {
-        alert('Report submitted successfully! Our team will review it shortly.');
+        setToast({ message: 'Report submitted successfully! Our team will review it shortly.', type: 'success' });
         setShowReportModal(false);
         setReportReason('');
         setReportDescription('');
       } else {
-        alert(data.message || 'Failed to submit report');
+        setToast({ message: data.message || 'Failed to submit report', type: 'error' });
       }
     } catch (error) {
       console.error('❌ Error submitting report:', error);
-      alert('Failed to submit report. Please try again.');
+      setToast({ message: 'Failed to submit report. Please try again.', type: 'error' });
     } finally {
       setSubmittingReport(false);
     }
@@ -163,7 +229,7 @@ const handleReportSubmit = async (e) => {
         <div className="text-center bg-white rounded-3xl p-8 shadow-xl">
           <p className="text-red-500 mb-4 font-semibold">{error || 'Provider not found'}</p>
           <button
-            onClick={() => navigate('/find-services')}
+            onClick={() => navigate('/find-classes')}
             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl hover:from-blue-700 hover:to-purple-700 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
           >
             Back to Services
@@ -177,6 +243,15 @@ const handleReportSubmit = async (e) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 pb-8">
+      {/* ✅ Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sticky top-0 z-20 shadow-lg">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
@@ -229,13 +304,13 @@ const handleReportSubmit = async (e) => {
           </div>
         </div>
 
-        {/* Services Offered */}
+        {/* Classes Offered */}
         <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl mb-6 border border-white/50 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
           
           <div className="relative flex items-center gap-3 mb-6">
             <div className="h-8 w-1 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Services Offered</h2>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">Classes Offered</h2>
           </div>
           
           {services.length === 0 ? (
@@ -299,7 +374,7 @@ const handleReportSubmit = async (e) => {
                           <h4 className="font-bold text-gray-900 text-lg mb-1">{feedback.learner_name || 'Anonymous'}</h4>
                           {service && (
                             <p className="text-sm text-gray-600 mb-2">
-                              <span className="font-semibold">Service:</span> {service.title}
+                              <span className="font-semibold">Classes:</span> {service.title}
                             </p>
                           )}
                         </div>
@@ -468,6 +543,20 @@ const handleReportSubmit = async (e) => {
       )}
 
       <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
           height: 8px;

@@ -5,9 +5,10 @@ const upload = require('../middleware/upload');
 
 // Authentication routes
 router.post('/login', authController.login);
+
+// ✅ Updated registration endpoint - now uses validId instead of studentId/studyLoad
 router.post('/register', upload.fields([
-  { name: 'studentId', maxCount: 1 },
-  { name: 'studyLoad', maxCount: 1 }
+  { name: 'validId', maxCount: 1 }  // Single valid ID file
 ]), authController.register);
 
 // Password reset routes
@@ -24,7 +25,7 @@ router.post('/upload-profile-image', authController.updateProfilePhoto);
 router.get('/unverified-users', authController.getUnverifiedUsers);
 router.post('/verify-user/:id', authController.verifyUser);
 
-// File retrieval
+// File retrieval - now retrieves valid ID
 router.get('/file/:userId/:fileType', authController.getUserFile);
 
 module.exports = router;

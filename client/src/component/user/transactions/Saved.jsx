@@ -301,7 +301,7 @@ export default function Saved() {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+        { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
         { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -315,7 +315,7 @@ export default function Saved() {
         { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
         { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
         { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-        { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
+        { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
         { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
         { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
         { name: "Past Feedbacks", icon: <ChatBubbleOvalLeftIcon className="h-5 w-5" />, path: "/view-past-feedback" },
@@ -327,8 +327,8 @@ export default function Saved() {
       { name: "Home", icon: <HomeIcon className="h-5 w-5" />, path: "/dashboard" },
       { name: "Profile", icon: <UserIcon className="h-5 w-5" />, path: "/profile" },
       { name: "Messages", icon: <ChatBubbleLeftIcon className="h-5 w-5" />, path: "/messages" },
-      { name: "My Services", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-services" },
-      { name: "Find Services", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-services" },
+      { name: "My Classes", icon: <ClipboardDocumentListIcon className="h-5 w-5" />, path: "/my-classes" },
+      { name: "Find Classes", icon: <MagnifyingGlassIcon className="h-5 w-5" />, path: "/find-classes" },
       { name: "Saved", icon: <BookmarkIcon className="h-5 w-5" />, path: "/saved" },
       { name: "Wallet", icon: <WalletIcon className="h-5 w-5" />, path: "/wallet" },
       { name: "Transactions", icon: <ReceiptRefundIcon className="h-5 w-5" />, path: "/transactions" },
@@ -396,7 +396,7 @@ export default function Saved() {
     };
   }, [userData]);
 
-  // Load user and fetch saved services
+  // Load user and fetch saved classes
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUserData(storedUser);
@@ -426,10 +426,10 @@ export default function Saved() {
       setError(null);
       const services = await getSavedServices(userId);
       setSavedServices(services || []);
-      console.log('📡 Saved services loaded:', services);
+      console.log('📡 Saved classes loaded:', services);
     } catch (err) {
-      console.error('Error fetching saved services:', err);
-      setError('Failed to load saved services');
+      console.error('Error fetching saved classes:', err);
+      setError('Failed to load saved classes');
       setSavedServices([]);
     } finally {
       setLoading(false);
@@ -521,7 +521,7 @@ export default function Saved() {
               >
                 <Bars3Icon className="h-6 w-6" />
               </button>
-              <h1 className="text-lg sm:text-xl font-semibold truncate">Saved Services</h1>
+              <h1 className="text-lg sm:text-xl font-semibold truncate">Saved Classes</h1>
             </div>
             <button 
               onClick={() => navigate('/notification')} 
@@ -537,13 +537,13 @@ export default function Saved() {
           </div>
         </div>
 
-        {/* Saved Services List */}
+        {/* Saved Classes List */}
         <div className="flex-1 overflow-y-auto">
           <div className="w-full px-2 sm:px-3 lg:px-4 py-2 sm:py-3">
             {loading ? (
               <div className="col-span-full text-center py-12 sm:py-16">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-500 text-sm sm:text-base">Loading saved services...</p>
+                <p className="text-gray-500 text-sm sm:text-base">Loading saved classes...</p>
               </div>
             ) : error ? (
               <div className="col-span-full text-center py-12 sm:py-16">
@@ -558,12 +558,12 @@ export default function Saved() {
             ) : savedServices.length === 0 ? (
               <div className="col-span-full text-center py-12 sm:py-16">
                 <BookmarkIcon className="h-12 sm:h-16 w-12 sm:w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-sm sm:text-base">No saved services yet</p>
+                <p className="text-gray-500 text-sm sm:text-base">No saved classes yet</p>
                 <button
-                  onClick={() => navigate('/find-services')}
+                  onClick={() => navigate('/find-classes')}
                   className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Browse Services
+                  Browse Classes
                 </button>
               </div>
             ) : (

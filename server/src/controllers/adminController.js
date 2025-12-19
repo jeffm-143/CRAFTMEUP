@@ -81,9 +81,9 @@ exports.getActivities = async (req, res) => {
     if (filterType === 'all') {
       query = `
         SELECT * FROM (
-          SELECT s.id, s.user_id, u.full_name, u.email, u.role, 'Service Created' as activity_type, s.title as details, s.status, s.id as related_id, s.created_at FROM services s JOIN users u ON s.user_id = u.id
+          SELECT s.id, s.user_id, u.full_name, u.email, u.role, 'Class Created' as activity_type, s.title as details, s.status, s.id as related_id, s.created_at FROM services s JOIN users u ON s.user_id = u.id
           UNION ALL
-          SELECT t.id, t.user_id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Service: ', COALESCE(sv.title, 'N/A')) as details, t.status, t.id as related_id, t.created_at FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services sv ON t.service_id = sv.id
+          SELECT t.id, t.user_id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Class: ', COALESCE(sv.title, 'N/A')) as details, t.status, t.id as related_id, t.created_at FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services sv ON t.service_id = sv.id
           UNION ALL
           SELECT wr.id, wr.user_id, u.full_name, u.email, u.role, 'Wallet Request' as activity_type, CONCAT(wr.type, ': ', wr.amount) as details, wr.status, wr.id as related_id, wr.created_at FROM wallet_requests wr JOIN users u ON wr.user_id = u.id
           UNION ALL
@@ -106,9 +106,9 @@ exports.getActivities = async (req, res) => {
       // ✅ FIX: Include created_at in count query subquery
       countQuery = `
         SELECT COUNT(*) as total FROM (
-          SELECT s.id, u.full_name, u.email, u.role, 'Service Created' as activity_type, s.title as details, s.status, s.created_at FROM services s JOIN users u ON s.user_id = u.id
+          SELECT s.id, u.full_name, u.email, u.role, 'Class Created' as activity_type, s.title as details, s.status, s.created_at FROM services s JOIN users u ON s.user_id = u.id
           UNION ALL
-          SELECT t.id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Service: ', COALESCE(sv.title, 'N/A')) as details, t.status, t.created_at FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services sv ON t.service_id = sv.id
+          SELECT t.id, u.full_name, u.email, u.role, 'Transaction' as activity_type, CONCAT('Requested Class: ', COALESCE(sv.title, 'N/A')) as details, t.status, t.created_at FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN services sv ON t.service_id = sv.id
           UNION ALL
           SELECT wr.id, u.full_name, u.email, u.role, 'Wallet Request' as activity_type, CONCAT(wr.type, ': ', wr.amount) as details, wr.status, wr.created_at FROM wallet_requests wr JOIN users u ON wr.user_id = u.id
           UNION ALL
@@ -118,7 +118,7 @@ exports.getActivities = async (req, res) => {
         ) as combined
         WHERE 1=1 ${searchCondition} ${dateCondition}
       `;
-    } else if (filterType === 'Service Created') {
+    } else if (filterType === 'Class Created') {
       const searchCond = search && search.trim() !== '' 
         ? `AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(s.title) LIKE ? OR LOWER(s.status) LIKE ?)`
         : '';
@@ -129,7 +129,7 @@ exports.getActivities = async (req, res) => {
       const dateCond = (dateFrom && dateTo) ? `AND DATE(s.created_at) BETWEEN ? AND ?` : '';
       
       query = `
-        SELECT s.id, s.user_id, u.full_name, u.email, u.role, 'Service Created' as activity_type, s.title as details, s.status, s.id as related_id, s.created_at 
+        SELECT s.id, s.user_id, u.full_name, u.email, u.role, 'Class Created' as activity_type, s.title as details, s.status, s.id as related_id, s.created_at 
         FROM services s 
         JOIN users u ON s.user_id = u.id
         WHERE 1=1 ${searchCond} ${dateCond}
@@ -254,7 +254,7 @@ exports.getActivities = async (req, res) => {
     let countParams = [];
     if (filterType === 'all' && search && search.trim() !== '') {
       countParams = Array(6).fill(`%${search.toLowerCase()}%`);
-    } else if (['Service Created', 'Transaction', 'Wallet Request', 'Report Submitted'].includes(filterType) && search && search.trim() !== '') {
+    } else if (['Class Created', 'Transaction', 'Wallet Request', 'Report Submitted'].includes(filterType) && search && search.trim() !== '') {
       countParams = Array(5).fill(`%${search.toLowerCase()}%`);
     } else if (filterType === 'User Registered' && search && search.trim() !== '') {
       countParams = Array(4).fill(`%${search.toLowerCase()}%`);
@@ -332,7 +332,7 @@ exports.getActivityDetails = async (req, res) => {
           }
         });
       }
-    } else if (type === 'Service Created') {
+    } else if (type === 'Class Created') {
       const [result] = await pool.execute(
         `SELECT s.*, u.full_name, u.email, u.role
          FROM services s
@@ -347,7 +347,7 @@ exports.getActivityDetails = async (req, res) => {
           success: true,
           data: {
             id: data.id,
-            activity_type: 'Service Created',
+            activity_type: 'Class Created',
             full_name: data.full_name,
             email: data.email,
             role: data.role,
@@ -428,47 +428,44 @@ exports.getActivityDetails = async (req, res) => {
       }
     });
   }
-} else if (type === 'User Registered') {
-  const [result] = await pool.execute(
-    `SELECT u.id, u.full_name, u.email, u.role, u.course, u.year, 
-            u.verification_status, u.created_at,
-            u.student_id_file, u.study_load_file
-     FROM users u
-     WHERE u.id = ?`,
-    [activityId]
-  );
+  } else if (type === 'User Registered') {
+    const [result] = await pool.execute(
+      `SELECT u.id, u.full_name, u.email, u.role, 
+              u.verification_status, u.created_at,
+              u.valid_id_file
+      FROM users u
+      WHERE u.id = ?`,
+      [activityId]
+    );
 
-  if (result && result.length > 0) {
-    const data = result[0];
-    
-    // Convert Buffer to base64 if needed
-    const convertToBase64 = (buffer) => {
-      if (!buffer) return null;
-      if (Buffer.isBuffer(buffer)) {
-        return buffer.toString('base64');
-      }
-      return buffer;
-    };
-    
-    return res.json({
-      success: true,
-      data: {
-        id: data.id,
-        activity_type: 'User Registered',
-        full_name: data.full_name,
-        email: data.email,
-        role: data.role,
-        student_id_file: convertToBase64(data.student_id_file),
-        study_load_file: convertToBase64(data.study_load_file),
-        course: data.course || 'N/A',
-        year: data.year || 'N/A',
-        verification_status: data.verification_status || 'pending',
-        created_at: data.created_at,
-        user_id: data.id
-      }
-    });
+    if (result && result.length > 0) {
+      const data = result[0];
+      
+      // Convert Buffer to base64 if needed
+      const convertToBase64 = (buffer) => {
+        if (!buffer) return null;
+        if (Buffer.isBuffer(buffer)) {
+          return buffer.toString('base64');
+        }
+        return buffer;
+      };
+      
+      return res.json({
+        success: true,
+        data: {
+          id: data.id,
+          activity_type: 'User Registered',
+          full_name: data.full_name,
+          email: data.email,
+          role: data.role,
+          valid_id_file: convertToBase64(data.valid_id_file),
+          verification_status: data.verification_status || 'pending',
+          created_at: data.created_at,
+          user_id: data.id
+        }
+      });
+    }
   }
-}
     // Fallback: Search for Transaction if type not specified
     const [result] = await pool.execute(
       `SELECT t.*, 
@@ -540,7 +537,7 @@ exports.getDashboardStats = async (req, res) => {
     `);
 
     const [activitiesByType] = await pool.execute(`
-      SELECT 'Service Created' as activity_type, COUNT(*) as count, 0 as pendingCount FROM services
+      SELECT 'Class Created' as activity_type, COUNT(*) as count, 0 as pendingCount FROM services
       UNION ALL
       SELECT 'Transaction', COUNT(*), COALESCE(SUM(CASE WHEN status IN ('pending', 'Pending') THEN 1 ELSE 0 END), 0) FROM transactions
       UNION ALL
@@ -581,7 +578,7 @@ exports.updateActivityStatus = async (req, res) => {
 
     let table;
     switch (type) {
-      case 'Service Created':
+      case 'Class Created':
         table = 'services';
         break;
       case 'Transaction':

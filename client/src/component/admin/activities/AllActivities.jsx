@@ -39,7 +39,7 @@ export default function AllActivitiesModal({ isOpen, onClose }) {
 
   const getActivityColor = (type) => {
     const colors = {
-      'Service Created': 'bg-blue-50 text-blue-700 border-blue-200',
+      'Class Created': 'bg-blue-50 text-blue-700 border-blue-200',
       'Transaction': 'bg-green-50 text-green-700 border-green-200',
       'Wallet Request': 'bg-purple-50 text-purple-700 border-purple-200',
       'Report Submitted': 'bg-red-50 text-red-700 border-red-200',

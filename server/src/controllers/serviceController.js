@@ -791,6 +791,28 @@ exports.getServiceFeedbacks = async (req, res) => {
   }
 };
 
+exports.getUserStatus = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [users] = await pool.execute(
+      'SELECT verification_status, role FROM users WHERE id = ?',
+      [userId]
+    );
+    
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.json({
+      verification_status: users[0].verification_status,
+      role: users[0].role
+    });
+  } catch (error) {
+    console.error('Error fetching user status:', error);
+    res.status(500).json({ message: 'Failed to fetch user status' });
+  }
+};
+
 module.exports = {
   ...module.exports,
   setIO

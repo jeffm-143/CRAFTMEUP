@@ -5,7 +5,7 @@ const path = require('path');
 const pool = require('../config/database');
 const nodemailer = require('nodemailer');
 
-// Configure nodemailer with SERVICE email (not user's email)
+// Configure nodemailer
 const emailUser = process.env.EMAIL_USER;
 const emailPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
 
@@ -24,7 +24,6 @@ if (emailUser && emailPass) {
     requireTLS: true
   });
 
-  // Test connection on startup
   transporter.verify((error, success) => {
     if (error) {
       console.error('Email service error:', error);
@@ -33,7 +32,7 @@ if (emailUser && emailPass) {
     }
   });
 } else {
-  console.warn('Email credentials not set. Set `EMAIL_USER` and `EMAIL_PASSWORD` (or `EMAIL_PASS`) in .env. Email sending is disabled.');
+  console.warn('Email credentials not set. Email sending is disabled.');
 }
 
 const generateVerificationCode = () => {
@@ -43,7 +42,7 @@ const generateVerificationCode = () => {
 const sendEmail = async (recipientEmail, subject, htmlContent) => {
   try {
     if (!transporter) {
-      console.warn('Skipping email send: transporter not configured (missing credentials).');
+      console.warn('Skipping email send: transporter not configured.');
       return false;
     }
 
@@ -96,12 +95,16 @@ exports.login = async (req, res) => {
         fullName: user.full_name,
         name: user.full_name,
         role: user.role,
-        course: user.course,
-        year: user.year,
-        verified: user.verification_status
+        phone: user.phone,
+        gender: user.gender,
+        ageRange: user.age_range,
+        bio: user.bio,
+        verified: user.verification_status,
+        profileImage: user.profile_image
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -109,15 +112,19 @@ exports.login = async (req, res) => {
 // Register controller
 exports.register = async (req, res) => {
   try {
-    const { fullName, email, password, course, year, role } = req.body;
+    const { fullName, email, password, phone, gender, dateOfBirth, bio, role } = req.body;
 
-    const studentIdBuffer = req.files?.studentId ? req.files.studentId[0].buffer : null;
-    const studyLoadBuffer = req.files?.studyLoad ? req.files.studyLoad[0].buffer : null;
+    // Get the valid ID file
+    const validIdBuffer = req.files?.validId ? req.files.validId[0].buffer : null;
 
+    console.log('📝 Registration data:', { fullName, email, role, phone, gender, dateOfBirth });
+
+    // Validation
     if (!fullName || !email || !password || !role) {
-      return res.status(400).json({ message: 'Missing required fields' });
+      return res.status(400).json({ message: 'Missing required fields: fullName, email, password, role' });
     }
 
+    // Check if email already exists
     const [existingUsers] = await pool.execute(
       'SELECT * FROM users WHERE email = ?',
       [email]
@@ -127,19 +134,31 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Insert new user
     const [result] = await pool.execute(
       `INSERT INTO users (
-        full_name, email, password, course, year, role, 
-        student_id_file, study_load_file, verification_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        full_name, email, password, phone, gender, date_of_birth, bio, role, 
+        valid_id_file, verification_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       [
-        fullName, email, hashedPassword, course || null, year || null, role,
-        studentIdBuffer, studyLoadBuffer
+        fullName, 
+        email, 
+        hashedPassword, 
+        phone || null, 
+        gender || null, 
+        dateOfBirth || null, 
+        bio || null, 
+        role,
+        validIdBuffer
       ]
     );
 
+    console.log('✅ User registered with ID:', result.insertId);
+
+    // Generate token
     const token = jwt.sign(
       { userId: result.insertId, email, role },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -154,12 +173,14 @@ exports.register = async (req, res) => {
         email,
         fullName,
         role,
-        course,
-        year
+        phone,
+        gender,
+        dateOfBirth,
+        bio
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
     res.status(500).json({ message: 'Server error during registration' });
   }
 };
@@ -168,15 +189,15 @@ exports.register = async (req, res) => {
 exports.getUnverifiedUsers = async (req, res) => {
   try {
     const [users] = await pool.execute(
-      `SELECT id, full_name, email, course, year, role, 
-              student_id_file, study_load_file, verification_status 
-       FROM users WHERE verification_status = 'pending'`
+      `SELECT id, full_name, email, phone, gender, date_of_birth, bio, role, 
+              valid_id_file, verification_status, created_at
+       FROM users WHERE verification_status = 'pending'
+       ORDER BY created_at DESC`
     );
 
     const usersWithBase64 = users.map(user => ({
       ...user,
-      student_id_file: user.student_id_file ? Buffer.from(user.student_id_file).toString('base64') : null,
-      study_load_file: user.study_load_file ? Buffer.from(user.study_load_file).toString('base64') : null
+      valid_id_file: user.valid_id_file ? Buffer.from(user.valid_id_file).toString('base64') : null
     }));
 
     res.json(usersWithBase64);
@@ -204,7 +225,7 @@ exports.verifyUser = async (req, res) => {
   }
 };
 
-// Forgot password - send code to user's email
+// Forgot password
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -260,19 +281,9 @@ exports.forgotPassword = async (req, res) => {
         
         <div style="background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 5px;">
           <p style="color: #856404; margin: 0; font-size: 14px;">
-            ⚠️ <strong>Do not share this code with anyone.</strong> We will never ask for your code.
+            ⚠️ <strong>Do not share this code with anyone.</strong>
           </p>
         </div>
-        
-        <p style="color: #999; font-size: 13px; margin-top: 30px; text-align: center;">
-          If you didn't request this, please ignore this email.
-        </p>
-        
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-        
-        <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
-          © 2025 CraftMeUp. All rights reserved.
-        </p>
       </div>
     `;
 
@@ -384,34 +395,6 @@ exports.resetPassword = async (req, res) => {
       [hashedPassword, email]
     );
 
-    const confirmationHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
-          <h1 style="color: white; margin: 0;">CraftMeUp</h1>
-        </div>
-        
-        <h2 style="color: #333; margin-top: 0;">Password Reset Successful ✓</h2>
-        
-        <p style="color: #666; font-size: 16px; line-height: 1.5;">
-          Your password has been successfully reset. You can now log in with your new password.
-        </p>
-        
-        <a href="http://localhost:3000/login" style="display: inline-block; background-color: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold;">
-          Go to Login
-        </a>
-        
-        <p style="color: #999; font-size: 14px; margin-top: 30px;">
-          If you didn't make this change, please contact support immediately.
-        </p>
-      </div>
-    `;
-
-    await sendEmail(
-      email,
-      'Password Reset Successful - CraftMeUp',
-      confirmationHtml
-    );
-
     res.json({ 
       success: true,
       message: 'Password reset successfully' 
@@ -431,7 +414,7 @@ exports.getUserData = async (req, res) => {
     const { id } = req.params;
     
     const [users] = await pool.execute(
-      `SELECT id, full_name, email, course, year, role, 
+      `SELECT id, full_name, email, phone, gender, date_of_birth, bio, role, 
               verified, verification_status, profile_image, created_at
        FROM users WHERE id = ?`,
       [id]
@@ -447,12 +430,14 @@ exports.getUserData = async (req, res) => {
       id: user.id,
       full_name: user.full_name,
       email: user.email,
-      course: user.course && user.course.trim() !== '' ? user.course : 'Not specified',
-      year: user.year && user.year.trim() !== '' ? user.year : 'Not specified',
+      phone: user.phone || '',
+      gender: user.gender || '',
+      date_of_birth: user.date_of_birth || '',
+      bio: user.bio || '',
       role: user.role || 'User',
       verified: user.verified === 1 || user.verified === true,
       verification_status: user.verification_status || 'pending',
-      profileImage: user.profile_image // ← Key fix: rename to profileImage
+      profileImage: user.profile_image
     };
 
     res.json(userData);
@@ -466,7 +451,7 @@ exports.getUserData = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, course, year, profileImage } = req.body;
+    const { full_name, phone, gender, date_of_birth, bio, profileImage } = req.body;
 
     let updateFields = [];
     let updateValues = [];
@@ -475,31 +460,36 @@ exports.updateProfile = async (req, res) => {
       updateFields.push('full_name = ?');
       updateValues.push(full_name);
     }
-    if (course !== undefined && course !== null) {
-      updateFields.push('course = ?');
-      updateValues.push(course);
+    if (phone !== undefined && phone !== null) {
+      updateFields.push('phone = ?');
+      updateValues.push(phone);
     }
-    if (year !== undefined && year !== null) {
-      updateFields.push('year = ?');
-      updateValues.push(year);
+    if (gender !== undefined && gender !== null) {
+      updateFields.push('gender = ?');
+      updateValues.push(gender);
     }
-    // IMPORTANT: Only update image if it was provided and is a valid base64 string
+    if (date_of_birth !== undefined && date_of_birth !== null) {
+      updateFields.push('date_of_birth = ?');
+      updateValues.push(date_of_birth);
+    }
+    if (bio !== undefined && bio !== null) {
+      updateFields.push('bio = ?');
+      updateValues.push(bio);
+    }
     if (profileImage !== undefined && profileImage !== null && profileImage.startsWith('data:')) {
       updateFields.push('profile_image = ?');
       updateValues.push(profileImage);
-      console.log('Updating profile image in database');
     }
 
     updateValues.push(id);
 
     if (updateFields.length > 0) {
       const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
-      console.log('Executing query:', query);
       await pool.execute(query, updateValues);
     }
 
     const [users] = await pool.execute(
-      `SELECT id, full_name, email, course, year, role, 
+      `SELECT id, full_name, email, phone, gender, date_of_birth, bio, role, 
               verified, verification_status, profile_image
        FROM users WHERE id = ?`,
       [id]
@@ -513,8 +503,10 @@ exports.updateProfile = async (req, res) => {
       id: users[0].id,
       full_name: users[0].full_name,
       email: users[0].email,
-      course: users[0].course,
-      year: users[0].year,
+      phone: users[0].phone,
+      gender: users[0].gender,
+      date_of_birth: users[0].date_of_birth,
+      bio: users[0].bio,
       role: users[0].role,
       verified: users[0].verified === 1,
       verification_status: users[0].verification_status,
@@ -547,7 +539,7 @@ exports.updateProfilePhoto = async (req, res) => {
     );
 
     const [updatedUser] = await pool.execute(
-      'SELECT id, email, full_name, course, year, role, verified, verification_status, profile_image FROM users WHERE id = ?',
+      'SELECT id, email, full_name, phone, gender, age_range, bio, role, verified, verification_status, profile_image FROM users WHERE id = ?',
       [id]
     );
 
@@ -557,8 +549,10 @@ exports.updateProfilePhoto = async (req, res) => {
         id: updatedUser[0].id,
         email: updatedUser[0].email,
         fullName: updatedUser[0].full_name,
-        course: updatedUser[0].course,
-        year: updatedUser[0].year,
+        phone: updatedUser[0].phone,
+        gender: updatedUser[0].gender,
+        age_range: updatedUser[0].age_range,
+        bio: updatedUser[0].bio,
         role: updatedUser[0].role,
         verified: updatedUser[0].verified,
         verification_status: updatedUser[0].verification_status,
@@ -576,25 +570,20 @@ exports.getUserFile = async (req, res) => {
   try {
     const { userId, fileType } = req.params;
     
-    const query = fileType === 'student-id' 
-      ? 'SELECT student_id_file FROM users WHERE id = ?'
-      : 'SELECT study_load_file FROM users WHERE id = ?';
-
+    const query = 'SELECT valid_id_file FROM users WHERE id = ?';
     const [result] = await pool.execute(query, [userId]);
 
     if (!result.length) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const fileData = fileType === 'student-id' 
-      ? result[0].student_id_file 
-      : result[0].study_load_file;
+    const fileData = result[0].valid_id_file;
 
     if (!fileData) {
       return res.status(404).json({ message: 'File not found' });
     }
 
-    res.setHeader('Content-Disposition', `attachment; filename="document"`);
+    res.setHeader('Content-Disposition', `attachment; filename="valid-id"`);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.send(fileData);
   } catch (error) {
@@ -602,3 +591,5 @@ exports.getUserFile = async (req, res) => {
     res.status(500).json({ message: 'Failed to retrieve file' });
   }
 };
+
+module.exports = exports;

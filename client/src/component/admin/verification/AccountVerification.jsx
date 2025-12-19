@@ -7,14 +7,14 @@ import {
 } from "@heroicons/react/24/outline";
 import AdminSidebar from "../../AdminSidebar";
 import api from '../../../services/api';
+import io from 'socket.io-client';
 
 export default function AccountVerification() {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [studentIdPreview, setStudentIdPreview] = useState(null);
-  const [studyLoadPreview, setStudyLoadPreview] = useState(null);
+  const [validIdPreview, setValidIdPreview] = useState(null);
   const [enlargeImage, setEnlargeImage] = useState(null);
 
   useEffect(() => {
@@ -24,10 +24,11 @@ export default function AccountVerification() {
   const fetchUnverifiedUsers = async () => {
     try {
       const response = await api.get('/auth/unverified-users');
+      console.log('📋 Fetched unverified users:', response.data);
       setUsers(response.data);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('❌ Error fetching users:', error);
       setLoading(false);
     }
   };
@@ -37,15 +38,18 @@ export default function AccountVerification() {
     return `data:image/jpeg;base64,${base64String}`;
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Not provided';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
   const handleViewDetails = async (user) => {
+    console.log('👁️ Viewing user details:', user);
     setSelectedUser(user);
     
-    if (user.student_id_file) {
-      setStudentIdPreview(blobToDataUrl(user.student_id_file));
-    }
-    
-    if (user.study_load_file) {
-      setStudyLoadPreview(blobToDataUrl(user.study_load_file));
+    if (user.valid_id_file) {
+      setValidIdPreview(blobToDataUrl(user.valid_id_file));
     }
     
     setIsModalOpen(true);
@@ -53,27 +57,37 @@ export default function AccountVerification() {
 
   const handleVerify = async (userId, status) => {
     try {
+      console.log(`✅ ${status === 'approved' ? 'Approving' : 'Rejecting'} user:`, userId);
       await api.post(`/auth/verify-user/${userId}`, { status });
+
+      const socket = io('http://localhost:5000');
+      socket.emit('verification-status-updated', {
+        userId: userId,
+        verification_status: status
+      });
+      console.log('📡 Emitted verification-status-updated event:', { userId, status });
+      socket.disconnect();
+
       fetchUnverifiedUsers();
       setIsModalOpen(false);
       setSelectedUser(null);
-      setStudentIdPreview(null);
-      setStudyLoadPreview(null);
+      setValidIdPreview(null);
+      alert(`User ${status === 'approved' ? 'approved' : 'rejected'} successfully!`);
     } catch (error) {
-      console.error('Error verifying user:', error);
+      console.error('❌ Error verifying user:', error);
+      alert('Failed to update verification status');
     }
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedUser(null);
-    setStudentIdPreview(null);
-    setStudyLoadPreview(null);
+    setValidIdPreview(null);
   };
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
-      {/* Sidebar - UNIFIED NAVIGATION */}
+      {/* Sidebar */}
       <AdminSidebar />
 
       {/* Main Content */}
@@ -95,7 +109,6 @@ export default function AccountVerification() {
             </div>
           </div>
         </div>
-
 
         <div className="flex-1 p-8 overflow-y-auto">
           {loading ? (
@@ -131,12 +144,12 @@ export default function AccountVerification() {
                     
                     <div className="space-y-2 mb-6 bg-gray-50 p-4 rounded-lg">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Course:</span>
-                        <span className="font-medium text-gray-700">{user.course}</span>
+                        <span className="text-gray-500">Phone:</span>
+                        <span className="font-medium text-gray-700">{user.phone || 'Not provided'}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Year:</span>
-                        <span className="font-medium text-gray-700">{user.year}</span>
+                        <span className="text-gray-500">Gender:</span>
+                        <span className="font-medium text-gray-700">{user.gender || 'Not provided'}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Role:</span>
@@ -203,13 +216,25 @@ export default function AccountVerification() {
                     </div>
                     
                     <div>
-                      <label className="text-xs text-gray-500 font-medium uppercase">Course</label>
-                      <p className="font-medium text-gray-800 mt-1">{selectedUser.course}</p>
+                      <label className="text-xs text-gray-500 font-medium uppercase">Phone</label>
+                      <p className="font-medium text-gray-800 mt-1">{selectedUser.phone || 'Not provided'}</p>
                     </div>
                     
                     <div>
-                      <label className="text-xs text-gray-500 font-medium uppercase">Year Level</label>
-                      <p className="font-medium text-gray-800 mt-1">{selectedUser.year}</p>
+                      <label className="text-xs text-gray-500 font-medium uppercase">Gender</label>
+                      <p className="font-medium text-gray-800 mt-1">{selectedUser.gender || 'Not specified'}</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-gray-500 font-medium uppercase">Date of Birth</label>
+                      <p className="font-medium text-gray-800 mt-1">{formatDate(selectedUser.date_of_birth)}</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-gray-500 font-medium uppercase">Bio</label>
+                      <p className="font-medium text-gray-800 mt-1 text-sm">
+                        {selectedUser.bio || 'No bio provided'}
+                      </p>
                     </div>
 
                     <div>
@@ -227,57 +252,32 @@ export default function AccountVerification() {
                   </div>
                 </div>
 
-                {/* Documents */}
+                {/* Document */}
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-lg text-gray-800 mb-4">Submitted Documents</h3>
+                  <h3 className="font-semibold text-lg text-gray-800 mb-4">Submitted Document</h3>
                   
-                    {/* Inside your Modal Content for each document */}
-                    <div>
-                      <label className="text-sm text-gray-600 font-medium mb-2 block">Student ID</label>
-                      {studentIdPreview ? (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
-                          <img
-                            src={studentIdPreview}
-                            alt="Student ID"
-                            className="w-full object-contain max-h-48"
-                          />
-                          <button
-                            onClick={() => setEnlargeImage(studentIdPreview)}
-                            className="mt-2 px-4 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                          >
-                            View
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-                          <p className="text-gray-500 text-sm">No file uploaded</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="text-sm text-gray-600 font-medium mb-2 block">Study Load</label>
-                      {studyLoadPreview ? (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
-                          <img
-                            src={studyLoadPreview}
-                            alt="Study Load"
-                            className="w-full object-contain max-h-48"
-                          />
-                          <button
-                            onClick={() => setEnlargeImage(studyLoadPreview)}
-                            className="mt-2 px-4 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                          >
-                            View
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-                          <p className="text-gray-500 text-sm">No file uploaded</p>
-                        </div>
-                      )}
-                    </div>
-
+                  <div>
+                    <label className="text-sm text-gray-600 font-medium mb-2 block">Valid ID</label>
+                    {validIdPreview ? (
+                      <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col items-center p-4">
+                        <img
+                          src={validIdPreview}
+                          alt="Valid ID"
+                          className="w-full object-contain max-h-96"
+                        />
+                        <button
+                          onClick={() => setEnlargeImage(validIdPreview)}
+                          className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          View Full Size
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
+                        <p className="text-gray-500 text-sm">No file uploaded</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -302,26 +302,26 @@ export default function AccountVerification() {
           </div>
         </div>
       )}
+
       {/* Enlarged Image Modal */}
       {enlargeImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
-          <div className="relative">
-            {/* Close button */}
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+          <div className="relative max-w-7xl max-h-[95vh]">
             <button
               onClick={() => setEnlargeImage(null)}
-              className="absolute top-2 right-2 text-white bg-black/50 rounded-full p-2 hover:bg-black/70 transition-colors"
+              className="absolute -top-12 right-0 text-white bg-black/50 rounded-full p-2 hover:bg-black/70 transition-colors"
             >
               <XMarkIcon className="w-6 h-6" />
             </button>
 
             <img
               src={enlargeImage}
-              alt="Enlarged"
-              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+              alt="Enlarged ID"
+              className="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl"
             />
           </div>
         </div>
       )}
-  </div>
-);
+    </div>
+  );
 }

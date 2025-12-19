@@ -15,10 +15,88 @@ import {
   BookmarkIcon,
   ArrowUpTrayIcon,
   ExclamationTriangleIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from 'react-router-dom';
 import { getWalletBalance, getUserWalletHistory, createWalletRequest, getNotifications, getUserData } from '../../../services/api';
-import io from 'socket.io-client'; // ✅ ADDED
+import io from 'socket.io-client';
+
+// ✅ Enhanced Toast Component with Progress Bar
+const Toast = ({ message, type = 'success', onClose, isLoading = false }) => {
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    if (!isLoading) {
+      const duration = 3000; // 3 seconds
+      const interval = 10; // Update every 10ms
+      const decrement = (interval / duration) * 100;
+
+      const timer = setInterval(() => {
+        setProgress((prev) => {
+          const newProgress = prev - decrement;
+          if (newProgress <= 0) {
+            clearInterval(timer);
+            onClose();
+            return 0;
+          }
+          return newProgress;
+        });
+      }, interval);
+
+      return () => clearInterval(timer);
+    }
+  }, [onClose, isLoading]);
+
+  const getStyles = () => {
+    if (isLoading) {
+      return {
+        bg: 'bg-gradient-to-r from-blue-500 to-blue-600',
+        progressBg: 'bg-blue-300',
+        icon: <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+      };
+    }
+    if (type === 'success') {
+      return {
+        bg: 'bg-gradient-to-r from-green-500 to-green-600',
+        progressBg: 'bg-green-300',
+        icon: <CheckCircleIcon className="h-5 w-5 text-white" />
+      };
+    }
+    return {
+      bg: 'bg-gradient-to-r from-red-500 to-red-600',
+      progressBg: 'bg-red-300',
+      icon: <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+    };
+  };
+
+  const styles = getStyles();
+
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-slideIn">
+      <div className={`${styles.bg} text-white px-5 py-3.5 rounded-xl shadow-2xl min-w-[300px] max-w-md overflow-hidden`}>
+        <div className="flex items-center gap-3 mb-2">
+          {styles.icon}
+          <p className="font-semibold text-sm flex-1">{message}</p>
+          {!isLoading && (
+            <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+        
+        {/* Progress Bar */}
+        {!isLoading && (
+          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className={`h-full ${styles.progressBg} transition-all duration-100 ease-linear`}
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function Wallet() {
   const [userData, setUserData] = useState(null);
@@ -34,7 +112,8 @@ export default function Wallet() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState('pending');
   const [hasReached200, setHasReached200] = useState(false);
-  const socketRef = useRef(null); // ✅ ADDED
+  const [toast, setToast] = useState(null); // ✅ Toast state
+  const socketRef = useRef(null);
 
   // Admin GCash Information (Static)
   const ADMIN_GCASH = {
@@ -42,7 +121,6 @@ export default function Wallet() {
     name: 'SkillSwap Admin'
   };
 
-  // Add to all components
   const role = userData?.role?.toLowerCase() || '';
 
   const navItems = (() => {
@@ -87,13 +165,11 @@ export default function Wallet() {
     ];
   })();
 
-  // ✅ MODIFIED useEffect - Added socket connection
   useEffect(() => {
     const loadNotifications = async () => {
       const storedUser = JSON.parse(localStorage.getItem('user'));
       setUserData(storedUser);
       
-      // Fetch unread notifications count
       if (storedUser?.id) {
         try {
           const notificationsResponse = await getNotifications(storedUser.id);
@@ -107,7 +183,6 @@ export default function Wallet() {
     
     loadNotifications();
 
-    // ✅ Setup socket connection for real-time wallet updates
     const user = JSON.parse(localStorage.getItem('user'));
     if (user?.id) {
       const socket = io('http://localhost:5000', {
@@ -120,16 +195,14 @@ export default function Wallet() {
         socket.emit('user-online', user.id);
       });
 
-      // ✅ Listen for wallet balance updates
       socket.on('wallet-balance-updated', (data) => {
         console.log('💰 Wallet: Balance updated', data);
-        fetchWalletData(); // Refresh wallet data
+        fetchWalletData();
+        setToast({ message: '💰 Wallet balance updated!', type: 'success' });
       });
 
-      // ✅ Listen for new notifications
       socket.on('notification-created', async (data) => {
         console.log('🔔 Wallet: New notification received', data);
-        // Update notification badge
         try {
           const notificationsResponse = await getNotifications(user.id);
           const unread = notificationsResponse.filter(n => !n.read).length;
@@ -139,7 +212,6 @@ export default function Wallet() {
         }
       });
 
-      // ✅ Listen for notification updates (when marked as read)
       socket.on('notification-updated', async (data) => {
         console.log('🔁 Wallet: Notification updated', data);
         try {
@@ -169,12 +241,15 @@ export default function Wallet() {
     const balanceNum = parseFloat(balance);
     
     if (isNaN(amountNum) || amountNum <= 0) {
-      alert('Please enter a valid amount');
+      setToast({ message: 'Please enter a valid amount', type: 'error' });
       return false;
     }
 
     if (balanceNum - amountNum < 20) {
-      alert('You must maintain a minimum balance of 20 SC. Maximum cash-out amount: ' + (balanceNum - 20) + ' SC');
+      setToast({ 
+        message: `You must maintain a minimum balance of 20 SC. Maximum cash-out: ${(balanceNum - 20).toFixed(2)} SC`, 
+        type: 'error' 
+      });
       return false;
     }
 
@@ -192,12 +267,10 @@ export default function Wallet() {
       console.log('Fetching wallet data for user:', user.id);
       
       try {
-        // Fetch fresh user data to get verification status
         const userDataResponse = await getUserData(user.id);
         if (userDataResponse?.data) {
           setVerificationStatus(userDataResponse.data.verification_status || 'pending');
           setUserData(userDataResponse.data);
-          // Update localStorage with fresh data
           localStorage.setItem('user', JSON.stringify(userDataResponse.data));
         }
 
@@ -213,13 +286,11 @@ export default function Wallet() {
           setBalance(0);
         }
 
-        // Fetch transaction history
         const historyResponse = await getUserWalletHistory(user.id);
         console.log('Transaction history response:', historyResponse);
         
         if (historyResponse?.data) {
           setTransactions(historyResponse.data);
-          // Check if user has ever reached 200 SC
           checkIfReached200(historyResponse.data);
         } else {
           console.error('Invalid transaction history data:', historyResponse);
@@ -228,16 +299,16 @@ export default function Wallet() {
       } catch (error) {
         console.error('Data fetch error:', error);
         setTransactions([]);
+        setToast({ message: 'Failed to load wallet data', type: 'error' });
       }
     } catch (error) {
       console.error('Main error:', error);
+      setToast({ message: 'An error occurred while loading wallet', type: 'error' });
     }
   };
 
-  // Check if user has ever reached 200 SC threshold
   const checkIfReached200 = (transactionHistory) => {
-    // Calculate the highest balance ever reached
-    let runningBalance = 50; // Starting balance
+    let runningBalance = 50;
     let maxBalance = 50;
 
     transactionHistory
@@ -263,10 +334,13 @@ export default function Wallet() {
       reader.onloadend = () => {
         setProofFile({
           name: file.name,
-          data: reader.result // base64 string
+          data: reader.result
         });
+        setToast({ message: `✓ File uploaded: ${file.name}`, type: 'success' });
       };
       reader.readAsDataURL(file);
+    } else if (file) {
+      setToast({ message: 'File size must be less than 5MB', type: 'error' });
     }
   };
 
@@ -300,19 +374,18 @@ export default function Wallet() {
   };
 
   const handleSubmitRequest = async () => {
-    // Check restrictions
     if (requestType === 'top-up' && !canTopUp()) {
-      alert('You cannot top up yet. ' + getRestrictionMessage());
+      setToast({ message: 'You cannot top up yet. ' + getRestrictionMessage(), type: 'error' });
       return;
     }
 
     if (requestType === 'cash-out' && !canCashOut()) {
-      alert('You cannot cash out yet. ' + getRestrictionMessage());
+      setToast({ message: 'You cannot cash out yet. ' + getRestrictionMessage(), type: 'error' });
       return;
     }
 
     if (!amount || !referenceNumber || (requestType === 'top-up' && !proofFile)) {
-      alert('Please fill in all required fields');
+      setToast({ message: 'Please fill in all required fields', type: 'error' });
       return;
     }
 
@@ -322,18 +395,19 @@ export default function Wallet() {
 
     try {
       setIsLoading(true);
+      setToast({ message: 'Processing your request...', type: 'success', isLoading: true });
+
       const user = JSON.parse(localStorage.getItem('user'));
       if (!user || !user.id) {
         throw new Error('User data not found');
       }
 
-      // Send as JSON instead of FormData
       const requestData = {
         userId: user.id,
         type: requestType,
         amount: parseFloat(amount),
         referenceNumber: referenceNumber,
-        proofImage: proofFile?.data || null // base64 string
+        proofImage: proofFile?.data || null
       };
 
       console.log('Submitting request:', { ...requestData, proofImage: '...' });
@@ -342,7 +416,7 @@ export default function Wallet() {
       console.log('Submit response:', response);
 
       if (response?.data?.success) {
-        alert('Request submitted successfully!');
+        setToast({ message: '✓ Request submitted successfully!', type: 'success', isLoading: false });
         setAmount('');
         setReferenceNumber('');
         setProofFile(null);
@@ -352,7 +426,11 @@ export default function Wallet() {
       }
     } catch (error) {
       console.error('Submit error:', error);
-      alert(error.response?.data?.message || 'Failed to submit request. Please try again.');
+      setToast({ 
+        message: error.response?.data?.message || 'Failed to submit request. Please try again.', 
+        type: 'error',
+        isLoading: false 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -362,14 +440,22 @@ export default function Wallet() {
 
   return (
     <div className="bg-gradient-to-b from-blue-50 to-white min-h-screen flex flex-col lg:flex-row w-full">
-      {/* Sidebar - Desktop (always visible) */}
+      {/* ✅ Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          isLoading={toast.isLoading}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Sidebar - Desktop */}
       <div className="hidden lg:flex fixed inset-y-0 left-0 bg-gradient-to-b from-gray-50 to-white w-64 flex-col shadow-xl border-r z-30">
-        {/* Header - Fixed at top */}
         <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600">
           <h2 className="font-semibold text-white text-lg">Menu</h2>
         </div>
 
-        {/* Navigation - Scrollable */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <button
@@ -386,9 +472,8 @@ export default function Wallet() {
         </nav>
       </div>
 
-      {/* Sidebar - Mobile (toggle-based) */}
+      {/* Sidebar - Mobile */}
       <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} bg-gradient-to-b from-gray-50 to-white w-64 transition-transform duration-300 ease-in-out z-40 lg:hidden flex flex-col shadow-xl border-r`}>
-        {/* Header - Fixed at top */}
         <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex justify-between items-center">
           <h2 className="font-semibold text-white">Menu</h2>
           <button 
@@ -399,7 +484,6 @@ export default function Wallet() {
           </button>
         </div>
 
-        {/* Navigation - Scrollable */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <button
@@ -493,13 +577,12 @@ export default function Wallet() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-6">
-              {/* Balance Card - Full Width on Left */}
+              {/* Balance Card */}
               <div className="lg:col-span-1 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-6 sm:p-8 text-white shadow-lg">
                 <p className="text-white/80 text-xs sm:text-sm">Current Balance</p>
                 <h2 className="text-3xl sm:text-4xl font-bold mt-2">{balance}</h2>
                 <p className="text-white/80 text-xs sm:text-sm mt-1">SkillCoins</p>
                 
-                {/* Verification Badge */}
                 <div className="mt-4 pt-4 border-t border-white/20">
                   <p className="text-white/60 text-xs mb-1">Account Status</p>
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -514,9 +597,9 @@ export default function Wallet() {
                 </div>
               </div>
 
-              {/* Form Section - Takes 2 Columns on Desktop */}
+              {/* Form Section */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-5">
-                {/* Admin GCash Info - Only show for Top-Up */}
+                {/* Admin GCash Info */}
                 {requestType === 'top-up' && (
                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-4 sm:p-5 border border-green-200">
                     <h3 className="text-sm font-semibold text-green-800 mb-3 flex items-center">
@@ -581,7 +664,6 @@ export default function Wallet() {
 
                 {/* Form Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  {/* Amount Input */}
                   <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100">
                     <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 block">
                       Amount (SkillCoins)
@@ -596,7 +678,6 @@ export default function Wallet() {
                     />
                   </div>
 
-                  {/* Reference Number Input */}
                   <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100">
                     <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 block">
                       {requestType === 'top-up' ? 'GCash Reference Number' : 'GCash Number'}
@@ -612,7 +693,7 @@ export default function Wallet() {
                   </div>
                 </div>
 
-                {/* File Upload - Only for Top-Up */}
+                {/* File Upload */}
                 {requestType === 'top-up' && (
                   <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100">
                     <label className="text-xs sm:text-sm font-medium text-gray-700 mb-3 block">
@@ -685,11 +766,26 @@ export default function Wallet() {
               </div>
             </div>
 
-            {/* Bottom spacing */}
             <div className="h-2 sm:h-3"></div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

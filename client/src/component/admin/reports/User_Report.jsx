@@ -9,12 +9,90 @@ import {
   CheckCircleIcon,
   ExclamationIcon,
   ShieldExclamationIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import AdminSidebar from "../../AdminSidebar";
 import { getAllReports, updateReportStatus } from "../../../services/api";
-import io from "socket.io-client"; // ✅ Add socket.io-client
+import io from "socket.io-client";
 
-const SOCKET_URL = 'http://localhost:5000'; // ✅ Socket server URL
+const SOCKET_URL = 'http://localhost:5000';
+
+// ✅ Enhanced Toast Component with Progress Bar
+const Toast = ({ message, type = 'success', onClose, isLoading = false }) => {
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    if (!isLoading) {
+      const duration = 3000; // 3 seconds
+      const interval = 10; // Update every 10ms
+      const decrement = (interval / duration) * 100;
+
+      const timer = setInterval(() => {
+        setProgress((prev) => {
+          const newProgress = prev - decrement;
+          if (newProgress <= 0) {
+            clearInterval(timer);
+            onClose();
+            return 0;
+          }
+          return newProgress;
+        });
+      }, interval);
+
+      return () => clearInterval(timer);
+    }
+  }, [onClose, isLoading]);
+
+  const getStyles = () => {
+    if (isLoading) {
+      return {
+        bg: 'bg-gradient-to-r from-blue-500 to-blue-600',
+        progressBg: 'bg-blue-300',
+        icon: <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+      };
+    }
+    if (type === 'success') {
+      return {
+        bg: 'bg-gradient-to-r from-green-500 to-green-600',
+        progressBg: 'bg-green-300',
+        icon: <CheckCircleIcon className="h-5 w-5 text-white" />
+      };
+    }
+    return {
+      bg: 'bg-gradient-to-r from-red-500 to-red-600',
+      progressBg: 'bg-red-300',
+      icon: <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+    };
+  };
+
+  const styles = getStyles();
+
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-slideIn">
+      <div className={`${styles.bg} text-white px-5 py-3.5 rounded-xl shadow-2xl min-w-[300px] max-w-md overflow-hidden`}>
+        <div className="flex items-center gap-3 mb-2">
+          {styles.icon}
+          <p className="font-semibold text-sm flex-1">{message}</p>
+          {!isLoading && (
+            <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+        
+        {/* Progress Bar */}
+        {!isLoading && (
+          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className={`h-full ${styles.progressBg} transition-all duration-100 ease-linear`}
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, violationTypes, getStatusBadgeClass }) => {
   const [selectedViolationType, setSelectedViolationType] = useState(selectedReport?.violationType || 'minor');
@@ -146,106 +224,106 @@ const ReportDetailModal = ({ selectedReport, onClose, reportHistory, onResolve, 
             </div>
           )}
 
-{/* Resolution Details if Resolved */}
-{isResolved && (
-  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border-2 border-purple-200 shadow-sm">
-    <h4 className="font-bold text-purple-900 mb-5 text-lg flex items-center gap-2">
-      <CheckCircleIcon className="w-6 h-6 text-purple-600" />
-      Resolution Details
-    </h4>
-    
-    <div className="space-y-4">
-      {/* Status Badge */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
-        <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Resolution Status</p>
-        <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${getStatusBadgeClass(selectedReport.status)}`}>
-          {selectedReport.status === 'invalid' && (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              Marked as Invalid
-            </>
-          )}
-          {selectedReport.status === 'warning' && (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              Warning Issued
-            </>
-          )}
-          {selectedReport.status === 'suspended' && (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-              </svg>
-              User Suspended
-            </>
-          )}
-          {!['invalid', 'warning', 'suspended'].includes(selectedReport.status) && (
-            <>
-              <CheckCircleIcon className="w-4 h-4 mr-2" />
-              {selectedReport.status}
-            </>
-          )}
-        </span>
-      </div>
+          {/* Resolution Details if Resolved */}
+          {isResolved && (
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border-2 border-purple-200 shadow-sm">
+              <h4 className="font-bold text-purple-900 mb-5 text-lg flex items-center gap-2">
+                <CheckCircleIcon className="w-6 h-6 text-purple-600" />
+                Resolution Details
+              </h4>
+              
+              <div className="space-y-4">
+                {/* Status Badge */}
+                <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
+                  <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Resolution Status</p>
+                  <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${getStatusBadgeClass(selectedReport.status)}`}>
+                    {selectedReport.status === 'invalid' && (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                        Marked as Invalid
+                      </>
+                    )}
+                    {selectedReport.status === 'warning' && (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Warning Issued
+                      </>
+                    )}
+                    {selectedReport.status === 'suspended' && (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                        </svg>
+                        User Suspended
+                      </>
+                    )}
+                    {!['invalid', 'warning', 'suspended'].includes(selectedReport.status) && (
+                      <>
+                        <CheckCircleIcon className="w-4 h-4 mr-2" />
+                        {selectedReport.status}
+                      </>
+                    )}
+                  </span>
+                </div>
 
-      {/* Resolved On */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
-        <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Resolved On</p>
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p className="text-gray-900 font-semibold text-base">
-            {selectedReport.updated_at 
-              ? new Date(selectedReport.updated_at).toLocaleString('en-US', {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true
-                })
-              : 'Not Available'}
-          </p>
-        </div>
-      </div>
+                {/* Resolved On */}
+                <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
+                  <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Resolved On</p>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-gray-900 font-semibold text-base">
+                      {selectedReport.updated_at 
+                        ? new Date(selectedReport.updated_at).toLocaleString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          })
+                        : 'Not Available'}
+                    </p>
+                  </div>
+                </div>
 
-      {/* Admin Notes */}
-      {selectedReport.adminNotes && (
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
-          <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Admin Notes</p>
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-purple-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="text-gray-800 text-sm leading-relaxed flex-1">{selectedReport.adminNotes}</p>
-          </div>
-        </div>
-      )}
+                {/* Admin Notes */}
+                {selectedReport.adminNotes && (
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-100">
+                    <p className="text-xs text-purple-600 font-semibold uppercase tracking-wide mb-3">Admin Notes</p>
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-purple-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="text-gray-800 text-sm leading-relaxed flex-1">{selectedReport.adminNotes}</p>
+                    </div>
+                  </div>
+                )}
 
-      {/* Resolution Summary Info Box */}
-      <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg p-4 text-white shadow-md">
-        <div className="flex items-start gap-3">
-          <div className="bg-white/20 rounded-full p-2 flex-shrink-0">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="font-bold text-sm mb-1.5">Report Resolved</p>
-            <p className="text-white/90 text-xs leading-relaxed">
-              This report has been reviewed and closed by an administrator. The resolution status indicates the action taken on the reported content or user.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                {/* Resolution Summary Info Box */}
+                <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg p-4 text-white shadow-md">
+                  <div className="flex items-start gap-3">
+                    <div className="bg-white/20 rounded-full p-2 flex-shrink-0">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-sm mb-1.5">Report Resolved</p>
+                      <p className="text-white/90 text-xs leading-relaxed">
+                        This report has been reviewed and closed by an administrator. The resolution status indicates the action taken on the reported content or user.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -312,8 +390,8 @@ export default function UserReports() {
     resolved: 0,
     thisWeek: 0
   });
+  const [toast, setToast] = useState(null); // ✅ Toast state
 
-  // ✅ Socket reference
   const socketRef = useRef(null);
 
   const violationTypes = {
@@ -325,24 +403,16 @@ export default function UserReports() {
   useEffect(() => {
     fetchReports();
 
-    // ✅ Initialize Socket.IO connection
     socketRef.current = io(SOCKET_URL, {
       transports: ['websocket', 'polling']
     });
 
-    // ✅ Listen for new reports
     socketRef.current.on('new-report', (data) => {
       console.log('🔔 New report received via socket:', data);
-      
-      // ✅ Automatically refresh the reports list
       fetchReports();
-      
-      // ✅ Optional: Show a toast notification
-      // You can add a toast library later if needed
-      console.log('📋 Reports list refreshed automatically!');
+      setToast({ message: '📋 New report received! List refreshed.', type: 'success' });
     });
 
-    // ✅ Cleanup on unmount
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -373,6 +443,7 @@ export default function UserReports() {
     } catch (error) {
       console.error('Error fetching reports:', error);
       setReports([]);
+      setToast({ message: 'Failed to fetch reports. Please try again.', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -385,44 +456,44 @@ export default function UserReports() {
       setShowDetailModal(true);
     } catch (error) {
       console.error('Error showing report details:', error);
+      setToast({ message: 'Failed to load report details', type: 'error' });
     }
   };
 
-const handleResolveReport = async (reportId, resolution, violationType = 'minor') => {
-  try {
-    console.log('Resolving report:', { reportId, resolution, violationType });
+  const handleResolveReport = async (reportId, resolution, violationType = 'minor') => {
+    try {
+      console.log('Resolving report:', { reportId, resolution, violationType });
 
-    const statusData = {
-      status: resolution,
-      violationType: violationType || 'minor',
-      adminNotes: resolution === 'invalid' 
-        ? 'No violation found' 
-        : `${violationType} violation confirmed - ${resolution} action taken`,
-      resolvedAt: new Date().toISOString()
-    };
+      // ✅ Show loading toast
+      setToast({ message: 'Processing report resolution...', type: 'success', isLoading: true });
 
-    console.log('📝 Sending status data:', statusData);
+      const statusData = {
+        status: resolution,
+        violationType: violationType || 'minor',
+        adminNotes: resolution === 'invalid' 
+          ? 'No violation found' 
+          : `${violationType} violation confirmed - ${resolution} action taken`,
+        resolvedAt: new Date().toISOString()
+      };
 
-    // ✅ 1. Update the report
-    await updateReportStatus(reportId, statusData);
-    
-    // ✅ 2. Close the modal
-    setShowDetailModal(false);
-    
-    // ✅ 3. Wait for backend to complete all operations (500ms)
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // ✅ 4. Refresh the reports list
-    await fetchReports();
-    
-    // ✅ 5. Show success message
-    alert(`✅ Report has been marked as ${resolution}`);
-    
-  } catch (error) {
-    console.error('❌ Error resolving report:', error);
-    alert('Failed to resolve report. Please try again.');
-  }
-};
+      console.log('📝 Sending status data:', statusData);
+
+      await updateReportStatus(reportId, statusData);
+      
+      setShowDetailModal(false);
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await fetchReports();
+      
+      // ✅ Show success toast
+      setToast({ message: `✅ Report has been marked as ${resolution}`, type: 'success', isLoading: false });
+      
+    } catch (error) {
+      console.error('❌ Error resolving report:', error);
+      setToast({ message: 'Failed to resolve report. Please try again.', type: 'error', isLoading: false });
+    }
+  };
 
   const getStatusBadgeClass = (status) => {
     switch(status) {
@@ -454,13 +525,11 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
     return matchesSearch && matchesFilter;
   });
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentReports = filteredReports.slice(indexOfFirstItem, indexOfLastItem);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [search, showHistory]);
@@ -481,7 +550,6 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
     }
   };
 
-  // Generate page numbers to display
   const getPageNumbers = () => {
     const pages = [];
     const maxPagesToShow = 5;
@@ -519,12 +587,19 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-white">
-      {/* Sidebar */}
+      {/* ✅ Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          isLoading={toast.isLoading}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <AdminSidebar />
 
-      {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Header */}
         <div className="bg-white border-b shadow-sm">
           <div className="flex items-center justify-between px-8 py-6">
             <div>
@@ -536,7 +611,6 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-4">
@@ -602,7 +676,6 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
               />
             </div>
 
-            {/* Status Filters */}
             <div className="flex gap-2">
               <button
                 onClick={() => setShowHistory(false)}
@@ -744,11 +817,9 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
               </div>
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Report Detail Modal */}
       {showDetailModal && (
         <ReportDetailModal
           selectedReport={selectedReport}
@@ -758,6 +829,22 @@ const handleResolveReport = async (reportId, resolution, violationType = 'minor'
           getStatusBadgeClass={getStatusBadgeClass}
         />
       )}
+
+      <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

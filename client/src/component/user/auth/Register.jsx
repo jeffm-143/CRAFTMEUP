@@ -109,7 +109,7 @@ const RegisterForm = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white flex items-center justify-center p-4">
-      <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl w-full max-w-md relative overflow-hidden">
+      <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl w-full max-w-xl relative overflow-hidden">
         {/* Decorative Elements */}
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-full opacity-10 blur-2xl"></div>
         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-gradient-to-tr from-indigo-400 to-purple-400 rounded-full opacity-10 blur-2xl"></div>
@@ -196,7 +196,7 @@ const RegisterForm = () => {
 
               {/* Password */}
               <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <div className="absolute left-4 top-1/3 -translate-y-1/2 text-gray-400">
                   🔒
                 </div>
                 <input
@@ -210,7 +210,7 @@ const RegisterForm = () => {
                   onChange={handleChange}
                 />
                 <label className="absolute left-12 -top-2.5 text-sm text-gray-600 bg-white px-2 
-                  transition-all duration-200 peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 
+                  transition-all duration-200 peer-placeholder-shown:top-1/3 peer-placeholder-shown:-translate-y-1/2 
                   peer-placeholder-shown:text-base peer-focus:-top-2.5 peer-focus:translate-y-0 peer-focus:text-sm 
                   peer-focus:text-blue-600 flex items-center gap-1">
                   Password
@@ -305,8 +305,6 @@ const RegisterForm = () => {
                   <option value="" className="text-gray-400">Select Gender</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
                 </select>
                 <label className="absolute left-12 -top-2.5 text-sm text-gray-600 bg-white px-2">
                   Gender (Optional)
